@@ -116,7 +116,7 @@ export default function IndicadorDashboard() {
   // Dados do indicador logado (inclui unidade adquirida pelo indicador)
   const [indicatorProfile, setIndicatorProfile] = useState<{
     id: string
-    full_name: string
+    full_name?: string
     autorizado?: boolean
     unidade_descricao?: string
     unidade_comprada_id?: string

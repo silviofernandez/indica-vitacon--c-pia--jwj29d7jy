@@ -580,7 +580,7 @@ export default function AdminConfiguracoes() {
                   </div>
                   <div>
                     <CardTitle className="text-lg font-bold text-[#0f2a43]">
-                      Regras de Bonificação do Indica Gabriel
+                      Regras de Remuneração Vitacon
                     </CardTitle>
                     <CardDescription className="text-xs text-gray-500">
                       Tabela <code>bonus_settings</code> • Lida pela rotina de cálculo{' '}

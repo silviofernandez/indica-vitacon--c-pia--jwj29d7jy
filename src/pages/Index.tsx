@@ -1,18 +1,8 @@
 import { Link } from 'react-router-dom'
-import {
-  ArrowRight,
-  Send,
-  Eye,
-  Award,
-  ShieldCheck,
-  Building2,
-  Sparkles,
-  CheckCircle,
-} from 'lucide-react'
+import { ArrowRight, Send, CheckCircle, Sparkles, Check, KeyRound, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import VitaconLogo from '@/components/VitaconLogo'
-import { Sparkles, Check, KeyRound, Building, TrendingUp } from 'lucide-react'
 
 export default function Index() {
   return (

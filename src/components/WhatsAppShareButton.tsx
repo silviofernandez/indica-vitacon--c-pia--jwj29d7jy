@@ -45,17 +45,17 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
 }) => {
   const getShareUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const defaultText = `Olá! Conheça o Indica Gabriel, o programa oficial de indicações da Imobiliária Gabriel. Você pode indicar compradores e locatários e ganhar bonificações em dinheiro por cada negócio fechado! Acesse: ${origin}`
+    const defaultText = `Olá! Conheça o Programa de Indicação Vitacon Smart Living. Você que é cliente pode indicar compradores para unidades Vitacon e receber comissão por cada fechamento! Acesse: ${origin}`
     const textToSend = message || defaultText
     return `https://wa.me/?text=${encodeURIComponent(textToSend)}`
   }
 
   const handleShare = async () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const title = 'Indica Gabriel — Imobiliária Gabriel'
+    const title = 'Programa de Indicação Vitacon'
     const text =
       message ||
-      'Conheça o Indica Gabriel, o programa oficial de indicações da Imobiliária Gabriel. Indique imóveis e ganhe bonificações!'
+      'Conheça o Programa de Indicação Vitacon. Indique compradores para apartamentos e estúdios Vitacon e receba comissão direta por cada fechamento!'
 
     // Se estiver em smartphone/tablet com suporte à Web Share API nativa, utiliza primeiro
     if (typeof navigator !== 'undefined' && 'share' in navigator) {

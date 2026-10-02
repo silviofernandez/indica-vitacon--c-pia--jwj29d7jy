@@ -101,24 +101,24 @@ export const InstallPwaPrompt: React.FC = () => {
   return (
     <div
       role="region"
-      aria-label="Instalação do Aplicativo Indica Gabriel"
+      aria-label="Instalação do Aplicativo Programa de Indicação Vitacon"
       className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 animate-fade-in-up"
     >
-      <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-[#14522a]/20 shadow-[#14522a]/10 flex flex-col gap-3">
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-emerald-900/20 shadow-emerald-900/10 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 p-1 bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="shrink-0 p-1 bg-emerald-50 rounded-xl shadow-sm border border-emerald-100">
               <GabrielLogo variant="symbol" size={38} />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-[#0f2a43] flex items-center gap-1.5 leading-tight">
-                Instalar Indica Gabriel
-                <span className="text-[10px] bg-[#14522a]/10 text-[#14522a] font-semibold px-1.5 py-0.5 rounded">
-                  App Grátis
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 leading-tight">
+                Instalar Indicação Vitacon
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded">
+                  PWA
                 </span>
               </h4>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Salve na tela de início do seu PC, tablet ou smartphone para acesso rápido.
+              <p className="text-xs text-slate-600 mt-0.5">
+                Salve na tela de início do seu celular ou computador para acompanhar suas comissões.
               </p>
             </div>
           </div>

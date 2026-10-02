@@ -78,15 +78,15 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <CardTitle className="text-lg font-bold text-[#0f2a43] flex items-center gap-2">
-                    Status da Conexão com o Supabase
+                    Status da Conexão com o Backend
                   </CardTitle>
                   <CardDescription className="text-xs text-gray-500">
-                    Backend oficial do Programa Vitacon — monitoramento em tempo real
+                    Backend oficial Vitacon Skip Cloud — monitoramento em tempo real
                   </CardDescription>
                 </div>
               </div>
 
-              {/* Badge Pulsante Requerido pela Especificação */}
+              {/* Badge Pulsante */}
               <div
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
                   supabaseStatus.connected
@@ -104,9 +104,7 @@ export default function Dashboard() {
                     }`}
                   />
                 </span>
-                {supabaseStatus.connected
-                  ? 'Conexão com Backend Ativa'
-                  : 'Backend em Modo Fallback Local'}
+                {supabaseStatus.connected ? 'Conexão com Backend Ativa' : 'Backend em Modo Local'}
               </div>
             </div>
           </CardHeader>
@@ -143,7 +141,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
                 <div className="bg-white p-2.5 rounded-lg border border-gray-200">
                   <span className="text-gray-500 block">Camada de Dados</span>
-                  <strong className="text-gray-800 font-semibold">Supabase & Postgres</strong>
+                  <strong className="text-gray-800 font-semibold">PocketBase Skip Cloud</strong>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-gray-200">
                   <span className="text-gray-500 block">Sessão Ativa</span>
@@ -159,16 +157,15 @@ export default function Dashboard() {
             </div>
 
             {/* Cartão Informativo de Preparação da Plataforma */}
-            <div className="p-5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-3.5">
-              <Sparkles className="w-5 h-5 text-[#1a5d8f] shrink-0 mt-0.5" />
+            <div className="p-5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-start gap-3.5">
+              <Sparkles className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-[#0f2a43]">
-                  Sua plataforma de indicações está pronta!
+                <h4 className="text-sm font-bold text-emerald-950">
+                  Programa de Indicação Vitacon Ativo!
                 </h4>
-                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                  A estrutura base, o design system da Imobiliária Gabriel e a conexão de backend
-                  estão devidamente ativos. Em breve você poderá cadastrar novos imóveis, vincular
-                  contatos e acompanhar cada comissão diretamente por este painel.
+                <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed">
+                  Acompanhe suas unidades adquiridas, cadastre novos interessados e monitore a
+                  evolução dos 6 estágios de negociação e comissões da Vitacon.
                 </p>
               </div>
             </div>

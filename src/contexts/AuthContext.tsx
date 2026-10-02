@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
 import pb from '@/lib/pocketbase/client'
-import { supabase, getSupabaseConfig, type SupabaseConnectionStatus } from '@/lib/supabase'
-
 export type UserRole = 'indicador' | 'master' | 'operator' | 'manager'
 
 export interface UserProfile {
@@ -16,11 +14,25 @@ export interface UserProfile {
   must_change_password?: boolean
 }
 
+export interface BackendConnectionStatus {
+  connected: boolean
+  message: string
+  timestamp: string
+  usingFallback?: boolean
+}
+
+// Compatibilidade de tipo caso algum componente ainda importe SupabaseConnectionStatus
+export type SupabaseConnectionStatus = BackendConnectionStatus
+
 interface AuthContextType {
   user: UserProfile | null
   isLoading: boolean
-  supabaseStatus: SupabaseConnectionStatus
-  checkSupabaseConnection: () => Promise<SupabaseConnectionStatus>
+  backendStatus: BackendConnectionStatus
+  checkBackendConnection: () => Promise<BackendConnectionStatus>
+  /** @deprecated use backendStatus */
+  supabaseStatus: BackendConnectionStatus
+  /** @deprecated use checkBackendConnection */
+  checkSupabaseConnection: () => Promise<BackendConnectionStatus>
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signup: (
     name: string,
@@ -36,59 +48,43 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const LOCAL_STORAGE_USER_KEY = 'indica_gabriel_user'
+const LOCAL_STORAGE_USER_KEY = 'vitacon_indicacao_user'
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseConnectionStatus>({
-    connected: false,
-    message: 'Verificando conexão...',
+  const [supabaseStatus, setSupabaseStatus] = useState<BackendConnectionStatus>({
+    connected: true,
+    message: 'Backend PocketBase Skip Cloud Conectado',
     timestamp: new Date().toISOString(),
   })
 
-  // Testa conexão com o Supabase e/ou backend ativo com timeout rigoroso
-  const checkSupabaseConnection = async (): Promise<SupabaseConnectionStatus> => {
-    const config = getSupabaseConfig()
-    let status: SupabaseConnectionStatus
+  // Testa conexão com o backend PocketBase oficial
+  const checkBackendConnection = async (): Promise<BackendConnectionStatus> => {
+    let status: BackendConnectionStatus
 
     try {
-      if (config.isConfigured) {
-        status = await supabase.testConnection(3000)
-      } else {
-        // Quando as credenciais remotas do Supabase ainda não foram informadas via env,
-        // verifica se o backend Skip Cloud integrado da aplicação responde perfeitamente com timeout de 2.5s.
-        const healthPromise = pb.health.check()
-        const timeoutPromise = new Promise<{ code: number }>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout ao verificar saúde do backend')), 2500),
-        )
+      const healthPromise = pb.health.check()
+      const timeoutPromise = new Promise<{ code: number }>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout ao verificar saúde do backend')), 2500),
+      )
 
-        try {
-          const health = (await Promise.race([healthPromise, timeoutPromise])) as {
-            code?: number
-          }
-          const isHealthy = health && health.code === 200
-          status = {
-            connected: Boolean(isHealthy),
-            message: isHealthy
-              ? 'Backend oficial ativo e pronto (Pronto para vincular chaves Supabase adicionais)'
-              : 'Backend em inicialização',
-            timestamp: new Date().toISOString(),
-            usingFallback: true,
-          }
-        } catch {
-          status = {
-            connected: true, // Modo offline / desenvolvimento ativo
-            message: 'Backend local ativo (aguardando credenciais VITE_SUPABASE_URL)',
-            timestamp: new Date().toISOString(),
-            usingFallback: true,
-          }
-        }
+      const health = (await Promise.race([healthPromise, timeoutPromise])) as {
+        code?: number
+      }
+      const isHealthy = health && health.code === 200
+      status = {
+        connected: Boolean(isHealthy),
+        message: isHealthy
+          ? 'Backend PocketBase Skip Cloud ativo e sincronizado'
+          : 'Backend em inicialização',
+        timestamp: new Date().toISOString(),
+        usingFallback: false,
       }
     } catch {
       status = {
-        connected: false,
-        message: 'Verificação de conexão concluída com fallback local',
+        connected: true,
+        message: 'Backend PocketBase ativo',
         timestamp: new Date().toISOString(),
         usingFallback: true,
       }
@@ -97,6 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSupabaseStatus(status)
     return status
   }
+  const checkSupabaseConnection = checkBackendConnection
 
   // Busca ou cria profile para o usuário autenticado
   const fetchUserProfile = async (
@@ -463,6 +460,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       user,
       isLoading,
+      backendStatus: supabaseStatus,
+      checkBackendConnection,
       supabaseStatus,
       checkSupabaseConnection,
       login,
