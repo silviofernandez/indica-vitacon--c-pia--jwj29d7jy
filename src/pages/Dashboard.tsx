@@ -50,7 +50,7 @@ export default function Dashboard() {
               <span className="text-xl">👋</span>
             </div>
             <p className="text-sm text-[#6b7280]">
-              Bem-vindo ao seu painel oficial do <strong>Indica Gabriel</strong>.
+              Bem-vindo ao seu painel oficial do <strong>Programa de Indicação Vitacon</strong>.
             </p>
           </div>
 
@@ -81,7 +81,7 @@ export default function Dashboard() {
                     Status da Conexão com o Supabase
                   </CardTitle>
                   <CardDescription className="text-xs text-gray-500">
-                    Backend oficial do Indica Gabriel — monitoramento em tempo real
+                    Backend oficial do Programa Vitacon — monitoramento em tempo real
                   </CardDescription>
                 </div>
               </div>

@@ -2,105 +2,96 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Search,
-  Filter,
   Users,
   Building2,
   Calendar,
   Phone,
-  Clock,
+  Mail,
   CheckCircle2,
-  AlertTriangle,
-  ChevronRight,
   RefreshCw,
   PlusCircle,
   Home,
-  Tag,
   Sparkles,
-  UserCheck,
+  DollarSign,
+  TrendingUp,
+  ShieldCheck,
+  Check,
+  Edit2,
+  Save,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Alert } from '@/components/ui/alert'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { useRealtime } from '@/hooks/use-realtime'
-import { listAllReferrals, getReferralById, type ReferralRecord } from '@/services/referrals'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { listAllReferrals, updateVitaconReferral, type ReferralRecord } from '@/services/referrals'
 import { formatPhone } from '@/services/indicators'
 import {
-  getStatusConfig,
-  getPropertyTypeLabel,
-  formatDateTime,
-} from '@/pages/indicador/IndicadorDashboard'
-import { evaluateReferralSla } from '@/lib/sla'
+  listEmpreendimentos,
+  listUnidades,
+  getConfigRecompensa,
+  calculateReward,
+  getEstagioMeta,
+  ESTAGIOS_VITACON,
+  type EmpreendimentoRecord,
+  type UnidadeRecord,
+  type ConfigRecompensaRecord,
+  type EstagioVitacon,
+} from '@/services/vitacon'
+import { formatCurrency, formatDateTime } from '@/pages/indicador/IndicadorDashboard'
 
 export default function AdminIndicacoes() {
-  const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [referrals, setReferrals] = useState<ReferralRecord[]>([])
-  const [nowMs, setNowMs] = useState<number>(() => Date.now())
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNowMs(Date.now())
-    }, 15000)
-    return () => clearInterval(timer)
-  }, [])
-
-  useRealtime<ReferralRecord>(
-    'referrals',
-    useCallback(async (e) => {
-      const { action, record } = e
-      if (!record || !record.id) return
-
-      if (action === 'delete') {
-        setReferrals((prev) => prev.filter((r) => r.id !== record.id))
-        return
-      }
-
-      const enriched = await getReferralById(record.id)
-      const recordToUse = enriched || record
-
-      setReferrals((prev) => {
-        const index = prev.findIndex((r) => r.id === recordToUse.id)
-        if (index >= 0) {
-          const next = [...prev]
-          next[index] = recordToUse
-          return next
-        }
-        return [recordToUse, ...prev]
-      })
-    }, []),
-    true,
-  )
+  const [empreendimentos, setEmpreendimentos] = useState<EmpreendimentoRecord[]>([])
+  const [unidades, setUnidades] = useState<UnidadeRecord[]>([])
+  const [rewardConfig, setRewardConfig] = useState<ConfigRecompensaRecord>({
+    id: '',
+    tipo: 'percentual',
+    valor: 1,
+    descricao: '1% Vitacon',
+    ativo: true,
+  })
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [estagioFilter, setEstagioFilter] = useState<string>('all')
+
+  // Modal de Atualização da Negociação Vitacon
+  const [editingRef, setEditingRef] = useState<ReferralRecord | null>(null)
+  const [modalEstagio, setModalEstagio] = useState<EstagioVitacon>('lead_enviado')
+  const [modalEmpId, setModalEmpId] = useState<string>('')
+  const [modalUniId, setModalUniId] = useState<string>('')
+  const [modalValorCompra, setModalValorCompra] = useState<string>('')
+  const [modalNotes, setModalNotes] = useState<string>('')
+  const [savingRef, setSavingRef] = useState(false)
 
   const loadData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setIsRefreshing(true)
-    } else {
-      setIsLoading(true)
-    }
+    if (isRefresh) setIsRefreshing(true)
+    else setIsLoading(true)
 
     try {
-      setLoadError(null)
-      const res = await listAllReferrals({ perPage: 500 })
-      setReferrals(res.items)
+      const [refRes, emps, unis, cfg] = await Promise.all([
+        listAllReferrals({ perPage: 500 }),
+        listEmpreendimentos(false),
+        listUnidades(),
+        getConfigRecompensa(),
+      ])
+
+      setReferrals(refRes.items)
+      setEmpreendimentos(emps)
+      setUnidades(unis)
+      setRewardConfig(cfg)
     } catch (err) {
-      console.warn('Erro ao carregar indicações:', err)
-      setLoadError('Não foi possível carregar a lista de indicações. Tente atualizar.')
+      console.warn('Erro ao carregar dados:', err)
     } finally {
       setIsLoading(false)
       setIsRefreshing(false)
@@ -111,332 +102,257 @@ export default function AdminIndicacoes() {
     void loadData()
   }, [loadData])
 
-  // Filtragem combinada
+  // Filtragem
   const filteredReferrals = useMemo(() => {
     let list = referrals
 
-    // Filtro por tipo: buyer, rental, sale, vitacon
-    if (typeFilter !== 'all') {
+    if (estagioFilter !== 'all') {
       list = list.filter((r) => {
-        const t = (r.property_type || '').toLowerCase()
-        if (typeFilter === 'buyer') return t === 'buyer' || t.includes('compra')
-        if (typeFilter === 'rental') return t === 'rental' || t.includes('alug')
-        if (typeFilter === 'sale') return t === 'sale' || t.includes('vend')
-        if (typeFilter === 'vitacon') return t === 'vitacon' || t.includes('vitacon')
-        return t === typeFilter
+        const est = (r.estagio || 'lead_enviado').toLowerCase()
+        return est === estagioFilter
       })
     }
 
-    // Filtro por status
-    if (statusFilter !== 'all') {
-      list = list.filter((r) => {
-        const s = (r.status || '').toLowerCase()
-        if (statusFilter === 'in_progress') {
-          return s === 'in_progress' || s === 'in_analysis'
-        }
-        if (statusFilter === 'closed_won') {
-          return s === 'closed_won' || s === 'closed'
-        }
-        if (statusFilter === 'closed_lost') {
-          return s === 'closed_lost' || s === 'cancelled'
-        }
-        return s === statusFilter
-      })
-    }
-
-    // Busca textual por nome ou contato do indicado, ou nome do indicador
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
       list = list.filter((r) => {
         const name = (r.client_name || '').toLowerCase()
         const phone = (r.client_phone || '').toLowerCase()
         const indName = (r.expand?.indicator_id?.full_name || '').toLowerCase()
-        const desc = (r.property_description || '').toLowerCase()
-        return name.includes(q) || phone.includes(q) || indName.includes(q) || desc.includes(q)
+        const empName = (r.expand?.empreendimento_id?.nome || '').toLowerCase()
+        return name.includes(q) || phone.includes(q) || indName.includes(q) || empName.includes(q)
       })
     }
 
     return list
-  }, [referrals, typeFilter, statusFilter, searchQuery])
+  }, [referrals, estagioFilter, searchQuery])
+
+  // Abrir Modal de Edição da Indicação
+  const handleOpenEdit = (ref: ReferralRecord) => {
+    setEditingRef(ref)
+    setModalEstagio((ref.estagio as EstagioVitacon) || 'lead_enviado')
+    setModalEmpId(ref.empreendimento_id || '')
+    setModalUniId(ref.unidade_escolhida_id || '')
+    setModalValorCompra(
+      ref.valor_compra ? String(ref.valor_compra) : ref.deal_value ? String(ref.deal_value) : '',
+    )
+    setModalNotes(ref.notes || '')
+  }
+
+  // Salvar Atualização
+  const handleSaveReferral = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingRef) return
+
+    setSavingRef(true)
+    const valorCompraNum = modalValorCompra ? parseFloat(modalValorCompra.replace(',', '.')) : 0
+
+    // Calcula comissão conforme regra vigente no momento
+    const comissaoCalc = calculateReward(valorCompraNum, rewardConfig)
+    const regraTexto =
+      rewardConfig.tipo === 'percentual'
+        ? `${rewardConfig.valor}% sobre o valor da compra`
+        : `${formatCurrency(rewardConfig.valor)} fixos`
+
+    const res = await updateVitaconReferral({
+      referral_id: editingRef.id,
+      estagio: modalEstagio,
+      empreendimento_id: modalEmpId || undefined,
+      unidade_escolhida_id: modalUniId || undefined,
+      valor_compra: valorCompraNum > 0 ? valorCompraNum : undefined,
+      comissao_calculada: comissaoCalc,
+      comissao_regra_aplicada: regraTexto,
+      notes: modalNotes,
+    })
+
+    setSavingRef(false)
+    if (res.success) {
+      setEditingRef(null)
+      void loadData(true)
+    }
+  }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. TOPO: TÍTULO E AÇÃO DE ATUALIZAR */}
-      <div className="bg-gradient-to-r from-[#0f2a43] to-[#15466d] rounded-2xl p-6 sm:p-8 text-white shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-xs font-semibold text-[#d9995b] mb-2">
-            <Building2 className="w-3.5 h-3.5" />
-            Gestão Completa de Oportunidades
+    <div className="space-y-6 pb-16 max-w-7xl mx-auto">
+      {/* 1. CABEÇALHO */}
+      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 rounded-2xl p-6 sm:p-8 text-white shadow-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 backdrop-blur-sm text-xs font-semibold text-emerald-400 border border-emerald-500/20">
+            <Sparkles className="w-3.5 h-3.5" />
+            Gestão Operacional de Negociações Vitacon
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Todas as Indicações
+            Indicações e Negociações
           </h1>
-          <p className="text-sm text-gray-200 mt-1 max-w-2xl leading-relaxed">
-            Consulte todas as indicações enviadas pelos indicadores parceiros, filtre por modalidade
-            ou status e acesse o histórico operacional de cada uma.
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            Consulte nome e contato do indicado, avance o estágio da negociação (Reunião realizada →
+            Gostou → Pensar → Proposta → Fechamento), registre a unidade comprada e calcule a
+            comissão.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void loadData(true)}
-            disabled={isRefreshing || isLoading}
-            className="border-white/20 text-white hover:bg-white/10 bg-white/5 h-10 px-3.5 rounded-xl font-medium"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span className="ml-2 text-xs">Atualizar</span>
-          </Button>
-
-          <Button
-            asChild
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/10 bg-white/5 h-10 px-4 rounded-xl font-medium"
-          >
-            <Link to="/admin" className="text-xs sm:text-sm">
-              Painel do Dia
-            </Link>
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void loadData(true)}
+          disabled={isRefreshing || isLoading}
+          className="border-white/20 text-white hover:bg-white/10 bg-white/5 h-10 px-4 rounded-xl text-xs self-start sm:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
       </div>
 
-      {/* 2. CARD DE FILTROS E BUSCA */}
-      <Card className="border-[#e5e0d8] shadow-sm bg-white">
-        <CardContent className="p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            {/* Campo de Busca */}
-            <div className="md:col-span-2 relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* 2. BARRA DE BUSCA E FILTROS */}
+      <Card className="border-slate-200 shadow-sm bg-white rounded-2xl">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
                 type="text"
-                placeholder="Buscar por nome do indicado, telefone ou indicador..."
+                placeholder="Buscar cliente indicado, telefone, indicador ou empreendimento..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-10 text-xs rounded-xl border-[#e5e0d8] focus-visible:ring-[#1a5d8f]"
+                className="pl-9 h-10 text-xs rounded-xl border-slate-200 focus-visible:ring-emerald-600"
               />
             </div>
 
-            {/* Filtro por Tipo */}
-            <div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="rounded-xl border-[#e5e0d8] h-10 text-xs">
-                  <SelectValue placeholder="Tipo de Imóvel" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-[#e5e0d8] rounded-xl text-xs">
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="buyer">Comprador</SelectItem>
-                  <SelectItem value="rental">Imóvel para alugar</SelectItem>
-                  <SelectItem value="sale">Imóvel para vender</SelectItem>
-                  <SelectItem value="vitacon">Vitacon SP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Filtro por Status (Rótulos Leigos) */}
-            <div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="rounded-xl border-[#e5e0d8] h-10 text-xs">
-                  <SelectValue placeholder="Status atual" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-[#e5e0d8] rounded-xl text-xs">
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="sent">Aguardando análise</SelectItem>
-                  <SelectItem value="in_progress">Em andamento</SelectItem>
-                  <SelectItem value="visited">Visita agendada</SelectItem>
-                  <SelectItem value="negotiating">Em negociação</SelectItem>
-                  <SelectItem value="closed_won">Concluída com sucesso</SelectItem>
-                  <SelectItem value="paid">Bonificação paga</SelectItem>
-                  <SelectItem value="closed_lost">Cancelada</SelectItem>
-                  <SelectItem value="expired">Expirada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Linha de resumo do filtro */}
-          <div className="flex items-center justify-between pt-2 border-t border-[#e5e0d8] text-xs text-gray-500">
-            <span>
-              Exibindo <strong>{filteredReferrals.length}</strong> de {referrals.length} indicações
-            </span>
-            {(searchQuery || typeFilter !== 'all' || statusFilter !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('')
-                  setTypeFilter('all')
-                  setStatusFilter('all')
-                }}
-                className="text-[#1a5d8f] hover:text-[#144a72] h-7 px-2 text-xs"
+            <div className="flex items-center gap-2">
+              <select
+                value={estagioFilter}
+                onChange={(e) => setEstagioFilter(e.target.value)}
+                className="h-10 px-3 rounded-xl border border-slate-200 text-xs bg-white text-slate-800 font-semibold"
               >
-                Limpar filtros
-              </Button>
-            )}
+                <option value="all">Todos os Estágios</option>
+                {ESTAGIOS_VITACON.map((e) => (
+                  <option key={e.key} value={e.key}>
+                    {e.step}. {e.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Alerta de erro de carregamento */}
-      {loadError && (
-        <Alert
-          variant="destructive"
-          className="bg-red-50 border-red-200 text-red-900 rounded-xl p-4 flex items-center justify-between gap-3"
-        >
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
-            <div>
-              <h4 className="text-sm font-bold text-red-900">Falha ao buscar indicações</h4>
-              <p className="text-xs text-red-700">{loadError}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void loadData(true)}
-            className="border-red-300 text-red-800 hover:bg-red-100 text-xs shrink-0 rounded-lg h-8"
-          >
-            Tentar novamente
-          </Button>
-        </Alert>
-      )}
+      {/* 3. LISTA DE INDICAÇÕES */}
+      <Card className="border-slate-200 shadow-sm bg-white rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-100 py-4 px-6 bg-slate-50/50 flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-600" />
+            Indicações ({filteredReferrals.length})
+          </CardTitle>
+          <span className="text-xs text-slate-500">
+            Regra Vigente:{' '}
+            <strong>
+              {rewardConfig.tipo === 'percentual'
+                ? `${rewardConfig.valor}%`
+                : formatCurrency(rewardConfig.valor)}
+            </strong>
+          </span>
+        </CardHeader>
 
-      {/* 3. LISTA DAS INDICAÇÕES */}
-      <Card className="border-[#e5e0d8] shadow-sm bg-white overflow-hidden">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-16 text-center space-y-4 px-4">
-              <div className="w-10 h-10 border-3 border-[#1a5d8f] border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-sm text-gray-500">Carregando lista de indicações...</p>
-              <div className="max-w-xl mx-auto space-y-2.5 pt-2">
-                <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-                <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-              </div>
-            </div>
+            <div className="py-16 text-center text-slate-500 text-sm">Carregando indicações...</div>
           ) : filteredReferrals.length === 0 ? (
-            <div className="py-16 px-4 text-center max-w-md mx-auto space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto text-gray-400">
-                <Filter className="w-6 h-6" />
-              </div>
-              <h4 className="text-base font-bold text-[#0f2a43]">Nenhuma indicação localizada</h4>
-              <p className="text-xs text-gray-500">
-                Nenhum registro corresponde aos filtros selecionados. Tente ajustar os critérios de
-                busca.
-              </p>
+            <div className="py-16 text-center text-slate-500 text-sm">
+              Nenhuma indicação encontrada.
             </div>
           ) : (
-            <div className="divide-y divide-[#e5e0d8]">
-              {filteredReferrals.map((ref) => {
-                const typeInfo = getPropertyTypeLabel(ref.property_type)
-                const statusCfg = getStatusConfig(ref.status)
-                const TypeIcon = typeInfo.icon
-                const indicatorName = ref.expand?.indicator_id?.full_name || 'Indicador parceiro'
-                const assignedTeamName = ref.expand?.assigned_team_id?.name
-                const assignedMgrName = ref.expand?.assigned_manager_id?.name
-                const sla = evaluateReferralSla(ref, nowMs)
+            <div className="divide-y divide-slate-100">
+              {filteredReferrals.map((r) => {
+                const estagio = getEstagioMeta(r.estagio)
+                const valorCompra = Number(
+                  r.valor_compra || r.deal_value || r.expand?.unidade_escolhida_id?.valor || 0,
+                )
+                const comissao =
+                  r.comissao_calculada !== undefined &&
+                  r.comissao_calculada !== null &&
+                  r.comissao_calculada > 0
+                    ? Number(r.comissao_calculada)
+                    : calculateReward(valorCompra, rewardConfig)
+
+                const empNome = r.expand?.empreendimento_id?.nome || 'A definir'
+                const uniNome = r.expand?.unidade_escolhida_id?.identificacao || 'Em escolha'
+                const indicatorName = r.expand?.indicator_id?.full_name || 'Cliente Indicador'
 
                 return (
                   <div
-                    key={ref.id}
-                    onClick={() => navigate(`/admin/indicacao/${ref.id}`)}
-                    className={`p-4 sm:p-5 transition-colors cursor-pointer flex flex-col md:flex-row md:items-center md:justify-between gap-4 group ${
-                      sla.isBreached
-                        ? 'bg-red-50/40 hover:bg-red-50/70 border-l-4 border-l-red-600'
-                        : 'hover:bg-[#faf7f2]/70'
-                    }`}
+                    key={r.id}
+                    className="p-5 sm:p-6 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                   >
-                    {/* Dados do Indicado */}
-                    <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="space-y-2 flex-1">
+                      {/* Linha 1: Nome do Indicado e Estágio */}
                       <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`font-bold text-base transition-colors ${
-                            sla.isBreached
-                              ? 'text-red-950 group-hover:text-red-700'
-                              : 'text-[#0f2a43] group-hover:text-[#1a5d8f]'
-                          }`}
-                        >
-                          {ref.client_name}
+                        <span className="font-extrabold text-base sm:text-lg text-slate-900">
+                          {r.client_name}
                         </span>
-
-                        {sla.isBreached ? (
-                          <Badge className="bg-red-600 text-white hover:bg-red-700 border-red-700 text-xs font-bold inline-flex items-center gap-1 shadow-xs animate-pulse">
-                            <AlertTriangle className="w-3 h-3 text-white" />
-                            <span>SLA atrasado</span>
-                          </Badge>
-                        ) : sla.remainingFormatted ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-emerald-50 text-emerald-800 border-emerald-300 text-xs font-semibold inline-flex items-center gap-1"
-                          >
-                            <Clock className="w-3 h-3 text-emerald-600" />
-                            <span>{sla.remainingFormatted}</span>
-                          </Badge>
-                        ) : null}
-
-                        <Badge
-                          variant="outline"
-                          className="bg-white text-gray-700 border-[#e5e0d8] text-xs font-medium inline-flex items-center gap-1"
-                        >
-                          <TypeIcon className="w-3 h-3 text-[#1a5d8f]" />
-                          <span>{typeInfo.label}</span>
-                        </Badge>
-
-                        <Badge
-                          className={`${statusCfg.badgeClass} text-xs font-semibold px-2 py-0.5`}
-                        >
-                          {statusCfg.label}
+                        <Badge className={`text-xs font-bold border ${estagio.badgeColor}`}>
+                          {estagio.step}/6: {estagio.label}
                         </Badge>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                        {ref.client_phone && (
-                          <span className="inline-flex items-center gap-1 text-gray-700 font-medium">
-                            <Phone className="w-3 h-3 text-gray-400" />
-                            {formatPhone(ref.client_phone)}
+                      {/* Linha 2: Contato e Indicador */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                        {r.client_phone && (
+                          <span className="flex items-center gap-1 font-semibold text-slate-900">
+                            <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                            {formatPhone(r.client_phone)}
                           </span>
                         )}
-
-                        <span className="inline-flex items-center gap-1 text-gray-600">
-                          <Users className="w-3 h-3 text-gray-400" />
-                          Indicado por: <strong className="text-gray-800">{indicatorName}</strong>
+                        {r.client_email && (
+                          <span className="flex items-center gap-1">
+                            <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            {r.client_email}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-slate-700">
+                          <Users className="w-3.5 h-3.5 text-slate-400" />
+                          Indicado por: <strong>{indicatorName}</strong>
                         </span>
-
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-gray-400" />
-                          {formatDateTime(ref.created)}
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {formatDateTime(r.created)}
                         </span>
                       </div>
 
-                      {/* Informação da equipe ou corretor atribuído */}
-                      <div className="flex flex-wrap items-center gap-3 text-xs pt-0.5">
-                        {assignedTeamName ? (
-                          <span className="text-[#1a5d8f] font-medium bg-[#1a5d8f]/5 px-2 py-0.5 rounded-md">
-                            Equipe: {assignedTeamName}
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md">
-                            Sem equipe atribuída
-                          </span>
-                        )}
-
-                        {assignedMgrName && (
-                          <span className="text-gray-600">
-                            Responsável: <strong>{assignedMgrName}</strong>
+                      {/* Linha 3: Empreendimento e Unidade Escolhida */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-700 pt-1">
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Empreendimento: <strong>{empNome}</strong>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Home className="w-3.5 h-3.5 text-emerald-600" />
+                          Unidade Escolhida: <strong>{uniNome}</strong>
+                        </span>
+                        {valorCompra > 0 && (
+                          <span className="flex items-center gap-1 font-semibold text-slate-900">
+                            Valor: {formatCurrency(valorCompra)}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Botão de Ação */}
-                    <div className="flex items-center gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-[#e5e0d8] justify-between md:justify-end">
+                    {/* Lado Direito: Comissão Calculada e Botão de Ação */}
+                    <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end">
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-right">
+                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">
+                          Comissão Calculada
+                        </span>
+                        <div className="text-base sm:text-lg font-black text-emerald-800">
+                          {formatCurrency(comissao)}
+                        </div>
+                      </div>
+
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-[#1a5d8f] text-[#1a5d8f] hover:bg-[#1a5d8f]/5 font-semibold text-xs h-9 px-3 rounded-xl"
+                        onClick={() => handleOpenEdit(r)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-4 rounded-xl text-xs flex items-center gap-1.5 shadow"
                       >
-                        Ver Detalhes
-                        <ChevronRight className="w-4 h-4 ml-1" />
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Atualizar Estágio
                       </Button>
                     </div>
                   </div>
@@ -446,6 +362,156 @@ export default function AdminIndicacoes() {
           )}
         </CardContent>
       </Card>
+
+      {/* MODAL PARA AVANÇAR ESTÁGIO DA NEGOCIAÇÃO E REGISTRAR UNIDADE COMPRADA */}
+      <Dialog open={!!editingRef} onOpenChange={(open) => !open && setEditingRef(null)}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Atualizar Estágio da Negociação Vitacon</DialogTitle>
+            <DialogDescription>
+              Avance o funil de compra, registre a unidade escolhida e confirme o valor de compra
+              para a comissão.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingRef && (
+            <form onSubmit={handleSaveReferral} className="space-y-4 py-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <p>
+                  <strong>Cliente Indicado:</strong> {editingRef.client_name}
+                </p>
+                <p>
+                  <strong>Contato:</strong> {editingRef.client_phone}{' '}
+                  {editingRef.client_email ? `• ${editingRef.client_email}` : ''}
+                </p>
+                <p>
+                  <strong>Indicador:</strong>{' '}
+                  {editingRef.expand?.indicator_id?.full_name || 'Cliente Vitacon'}
+                </p>
+              </div>
+
+              {/* SELEÇÃO DO ESTÁGIO */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Estágio da Negociação (Visível para o Indicador) *
+                </label>
+                <select
+                  value={modalEstagio}
+                  onChange={(e) => setModalEstagio(e.target.value as EstagioVitacon)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 text-sm font-semibold bg-white focus:ring-emerald-600"
+                  required
+                >
+                  {ESTAGIOS_VITACON.map((step) => (
+                    <option key={step.key} value={step.key}>
+                      Etapa {step.step}: {step.label} — {step.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* EMPREENDIMENTO E UNIDADE ESCOLHIDA PELO INDICADO */}
+              <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 block">
+                  Unidade Escolhida / Comprada pelo Indicado
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">
+                      Empreendimento
+                    </label>
+                    <select
+                      value={modalEmpId}
+                      onChange={(e) => {
+                        setModalEmpId(e.target.value)
+                        setModalUniId('')
+                      }}
+                      className="w-full h-9 px-2 text-xs rounded-lg border border-slate-200 bg-white"
+                    >
+                      <option value="">Selecione o empreendimento...</option>
+                      {empreendimentos.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">
+                      Unidade Específica
+                    </label>
+                    <select
+                      value={modalUniId}
+                      onChange={(e) => {
+                        setModalUniId(e.target.value)
+                        const uni = unidades.find((u) => u.id === e.target.value)
+                        if (uni?.valor && !modalValorCompra) {
+                          setModalValorCompra(String(uni.valor))
+                        }
+                      }}
+                      disabled={!modalEmpId}
+                      className="w-full h-9 px-2 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-50"
+                    >
+                      <option value="">
+                        {modalEmpId ? 'Selecione a unidade...' : 'Escolha o empreendimento'}
+                      </option>
+                      {unidades
+                        .filter((u) => u.empreendimento_id === modalEmpId)
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.identificacao}{' '}
+                            {u.valor ? `(R$ ${u.valor.toLocaleString('pt-BR')})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800">
+                    Valor da Compra da Unidade (R$)
+                  </label>
+                  <Input
+                    type="number"
+                    value={modalValorCompra}
+                    onChange={(e) => setModalValorCompra(e.target.value)}
+                    placeholder="Ex.: 490000"
+                    className="h-10 text-sm font-bold border-slate-200 bg-white"
+                  />
+                  <span className="text-[11px] text-slate-500">
+                    A comissão é calculada sobre este valor conforme a regra ativa no momento do
+                    fechamento.
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Observações Internas</label>
+                <Input
+                  value={modalNotes}
+                  onChange={(e) => setModalNotes(e.target.value)}
+                  placeholder="Ex.: Reunião realizada com corretor da Vitacon. Proposta enviada para o 12º andar."
+                  className="h-10 text-xs"
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditingRef(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingRef}
+                  className="bg-emerald-600 text-white font-bold"
+                >
+                  {savingRef ? 'Salvando...' : 'Salvar e Notificar Indicador'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -235,4 +235,5 @@ export const GabrielSymbolImg: React.FC<{
   )
 }
 
+export { VitaconLogo } from './VitaconLogo'
 export default GabrielLogo

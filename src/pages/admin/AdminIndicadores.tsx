@@ -14,19 +14,19 @@ import {
   Calendar,
   Phone,
   Mail,
-  MapPin,
-  FileText,
   Shield,
   KeyRound,
   RefreshCw,
-  Eye,
+  Plus,
+  Edit2,
+  Building2,
+  Home,
+  ShieldCheck,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -35,45 +35,66 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert } from '@/components/ui/alert'
 import {
   listIndicators,
-  approveIndicator,
-  rejectIndicator,
+  createIndicatorByMaster,
+  updateIndicatorByMaster,
+  formatCPF,
+  formatPhone,
   type IndicatorRecord,
-  type ApproveIndicatorResult,
 } from '@/services/indicators'
+import {
+  listEmpreendimentos,
+  listUnidades,
+  type EmpreendimentoRecord,
+  type UnidadeRecord,
+} from '@/services/vitacon'
 
 export default function AdminIndicadores() {
   const [indicators, setIndicators] = useState<IndicatorRecord[]>([])
+  const [empreendimentos, setEmpreendimentos] = useState<EmpreendimentoRecord[]>([])
+  const [unidades, setUnidades] = useState<UnidadeRecord[]>([])
+
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
+  const [activeTab, setActiveTab] = useState<'all' | 'authorized' | 'pending'>('all')
 
-  // Modais de ação
-  const [approvingItem, setApprovingItem] = useState<IndicatorRecord | null>(null)
-  const [isApproving, setIsApproving] = useState(false)
-  const [approvalResult, setApprovalResult] = useState<ApproveIndicatorResult | null>(null)
-  const [approvalError, setApprovalError] = useState<string | null>(null)
-  const [copiedPassword, setCopiedPassword] = useState(false)
+  // Modal Novo / Editar Indicador
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<IndicatorRecord | null>(null)
+  const [formName, setFormName] = useState('')
+  const [formEmail, setFormEmail] = useState('')
+  const [formPhone, setFormPhone] = useState('')
+  const [formCpf, setFormCpf] = useState('')
+  const [formEmpId, setFormEmpId] = useState('')
+  const [formUniId, setFormUniId] = useState('')
+  const [formUniDesc, setFormUniDesc] = useState('')
+  const [formAutorizado, setFormAutorizado] = useState(true)
+  const [formPassword, setFormPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    email: string
+    pass: string
+  } | null>(null)
 
-  const [rejectingItem, setRejectingItem] = useState<IndicatorRecord | null>(null)
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [isRejecting, setIsRejecting] = useState(false)
-  const [rejectionError, setRejectionError] = useState<string | null>(null)
-
-  const [viewingItem, setViewingItem] = useState<IndicatorRecord | null>(null)
-
-  const fetchIndicators = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
       setLoadError(null)
-      const data = await listIndicators()
-      setIndicators(data)
+      const [indData, emps, unis] = await Promise.all([
+        listIndicators(),
+        listEmpreendimentos(false),
+        listUnidades(),
+      ])
+      setIndicators(indData)
+      setEmpreendimentos(emps)
+      setUnidades(unis)
     } catch (err) {
-      console.error('Erro ao buscar indicadores:', err)
-      setLoadError('Não foi possível carregar a lista de indicadores.')
+      console.error('Erro ao buscar dados:', err)
+      setLoadError('Não foi possível carregar os indicadores da Vitacon.')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -81,23 +102,21 @@ export default function AdminIndicadores() {
   }, [])
 
   useEffect(() => {
-    fetchIndicators()
-  }, [fetchIndicators])
+    void fetchAll()
+  }, [fetchAll])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchIndicators()
+    void fetchAll()
   }
 
-  // Filtragem e busca
+  // Filtragem
   const filteredIndicators = indicators.filter((item) => {
-    // Filtro por tab/status
-    const status = item.approval_status || (item.approved ? 'approved' : 'pending')
-    if (activeTab !== 'all' && status !== activeTab) {
-      return false
-    }
+    const isAuth = item.autorizado !== false && item.approved !== false
 
-    // Busca textual por nome, CPF, e-mail ou telefone
+    if (activeTab === 'authorized' && !isAuth) return false
+    if (activeTab === 'pending' && isAuth) return false
+
     if (!searchTerm.trim()) return true
     const term = searchTerm.toLowerCase().trim()
     const nameMatch = item.full_name?.toLowerCase().includes(term)
@@ -107,130 +126,120 @@ export default function AdminIndicadores() {
     return nameMatch || emailMatch || phoneMatch || cpfMatch
   })
 
-  // Contagens
-  const counts = {
-    pending: indicators.filter(
-      (i) => (i.approval_status || (i.approved ? 'approved' : 'pending')) === 'pending',
-    ).length,
-    approved: indicators.filter(
-      (i) => (i.approval_status || (i.approved ? 'approved' : 'pending')) === 'approved',
-    ).length,
-    rejected: indicators.filter((i) => i.approval_status === 'rejected').length,
-    all: indicators.length,
-  }
+  // Abrir Modal
+  const handleOpenModal = (ind?: IndicatorRecord) => {
+    setModalError(null)
+    setCreatedCredentials(null)
 
-  // Ação: Confirmar Aprovação
-  const handleConfirmApproval = async () => {
-    if (!approvingItem) return
-    setIsApproving(true)
-    setApprovalError(null)
-
-    try {
-      const res = await approveIndicator(approvingItem.id)
-      if (res.success && res.data) {
-        setApprovalResult(res.data)
-        // Atualiza a lista local
-        setIndicators((prev) =>
-          prev.map((ind) =>
-            ind.id === approvingItem.id
-              ? {
-                  ...ind,
-                  approval_status: 'approved',
-                  approved: true,
-                  profile_id: res.data?.profile_id,
-                  user_id: res.data?.user_id,
-                }
-              : ind,
-          ),
-        )
-      } else {
-        setApprovalError(res.error || 'Não foi possível aprovar este indicador.')
-      }
-    } catch {
-      setApprovalError('Erro inesperado durante a aprovação.')
-    } finally {
-      setIsApproving(false)
+    if (ind) {
+      setEditingItem(ind)
+      setFormName(ind.full_name || '')
+      setFormEmail(ind.email || '')
+      setFormPhone(ind.phone || '')
+      setFormCpf(ind.cpf_cnpj || '')
+      setFormEmpId(ind.empreendimento_id || '')
+      setFormUniId(ind.unidade_comprada_id || '')
+      setFormUniDesc(ind.unidade_descricao || '')
+      setFormAutorizado(ind.autorizado !== false && ind.approved !== false)
+      setFormPassword('')
+    } else {
+      setEditingItem(null)
+      setFormName('')
+      setFormEmail('')
+      setFormPhone('')
+      setFormCpf('')
+      setFormEmpId(empreendimentos[0]?.id || '')
+      setFormUniId('')
+      setFormUniDesc('')
+      setFormAutorizado(true)
+      setFormPassword('Vitacon@2026')
     }
+    setModalOpen(true)
   }
 
-  // Ação: Copiar senha temporária
-  const handleCopyPassword = () => {
-    if (!approvalResult?.temp_password) return
-    navigator.clipboard.writeText(approvalResult.temp_password)
-    setCopiedPassword(true)
-    setTimeout(() => setCopiedPassword(false), 3000)
-  }
+  const handleSaveIndicator = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setModalError(null)
 
-  // Ação: Confirmar Rejeição
-  const handleConfirmRejection = async () => {
-    if (!rejectingItem) return
-    if (!rejectionReason.trim()) {
-      setRejectionError('Por favor, informe o motivo da rejeição.')
+    if (!formName.trim() || !formEmail.trim()) {
+      setModalError('Nome completo e e-mail são obrigatórios.')
       return
     }
 
-    setIsRejecting(true)
-    setRejectionError(null)
+    if (!editingItem && !formPassword) {
+      setModalError('Defina uma senha inicial de acesso.')
+      return
+    }
 
-    try {
-      const res = await rejectIndicator(rejectingItem.id, rejectionReason.trim())
+    setIsSubmitting(true)
+
+    if (editingItem) {
+      const res = await updateIndicatorByMaster(editingItem.id, {
+        full_name: formName.trim(),
+        email: formEmail.trim().toLowerCase(),
+        phone: formPhone.trim(),
+        cpf_cnpj: formCpf.trim(),
+        empreendimento_id: formEmpId || undefined,
+        unidade_comprada_id: formUniId || undefined,
+        unidade_descricao: formUniDesc.trim() || undefined,
+        autorizado: formAutorizado,
+        new_password: formPassword.trim() || undefined,
+      })
+
+      setIsSubmitting(false)
       if (res.success) {
-        // Atualiza a lista local
-        setIndicators((prev) =>
-          prev.map((ind) =>
-            ind.id === rejectingItem.id
-              ? {
-                  ...ind,
-                  approval_status: 'rejected',
-                  approved: false,
-                  rejection_reason: rejectionReason.trim(),
-                }
-              : ind,
-          ),
-        )
-        setRejectingItem(null)
-        setRejectionReason('')
+        setModalOpen(false)
+        void fetchAll()
       } else {
-        setRejectionError(res.error || 'Não foi possível rejeitar este indicador.')
+        setModalError(res.error || 'Erro ao atualizar indicador.')
       }
-    } catch {
-      setRejectionError('Erro inesperado durante a rejeição.')
-    } finally {
-      setIsRejecting(false)
+    } else {
+      const res = await createIndicatorByMaster({
+        full_name: formName.trim(),
+        email: formEmail.trim().toLowerCase(),
+        phone: formPhone.trim(),
+        cpf_cnpj: formCpf.trim(),
+        empreendimento_id: formEmpId || undefined,
+        unidade_comprada_id: formUniId || undefined,
+        unidade_descricao: formUniDesc.trim() || undefined,
+        autorizado: formAutorizado,
+        initial_password: formPassword.trim(),
+      })
+
+      setIsSubmitting(false)
+      if (res.success) {
+        setCreatedCredentials({
+          email: formEmail.trim().toLowerCase(),
+          pass: formPassword.trim(),
+        })
+        void fetchAll()
+      } else {
+        setModalError(res.error || 'Erro ao cadastrar indicador.')
+      }
     }
   }
 
-  const formatDate = (isoString?: string) => {
-    if (!isoString) return '-'
-    try {
-      const date = new Date(isoString)
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(date)
-    } catch {
-      return isoString
-    }
+  const handleToggleAutorizacao = async (ind: IndicatorRecord) => {
+    const newState = !(ind.autorizado !== false && ind.approved !== false)
+    await updateIndicatorByMaster(ind.id, { autorizado: newState })
+    void fetchAll()
   }
 
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho da Página */}
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* 1. CABEÇALHO */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1a5d8f]/10 text-xs font-semibold text-[#1a5d8f] mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700 mb-2">
             <Shield className="w-3.5 h-3.5" />
-            Gestão Master
+            Gestão Master • Vitacon
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0f2a43]">
-            Aprovação de Indicadores
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            Clientes Indicadores Autorizados
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Analise cadastros públicos de novos indicadores parceiros, aprove ou rejeite
-            solicitações.
+          <p className="text-sm text-slate-500 mt-1">
+            Cadastre os clientes que adquiriram unidades Vitacon e autorize-os a indicar e receber
+            comissões.
           </p>
         </div>
 
@@ -240,327 +249,201 @@ export default function AdminIndicadores() {
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing || loading}
-            className="border-[#e5e0d8] hover:bg-[#faf7f2] text-gray-700 rounded-xl"
+            className="rounded-xl border-slate-200"
           >
             <RefreshCw className={`w-4 h-4 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
+
+          <Button
+            onClick={() => handleOpenModal()}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm h-10 px-4 flex items-center gap-2 shadow"
+          >
+            <Plus className="w-4 h-4" />
+            Cadastrar Novo Indicador
+          </Button>
         </div>
       </div>
 
-      {/* Alerta de erro com botão de retentativa */}
       {loadError && (
-        <Alert
-          variant="destructive"
-          className="bg-red-50 border-red-200 text-red-900 rounded-xl p-4 flex items-center justify-between gap-3"
-        >
-          <div className="flex items-center gap-2.5">
-            <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
-            <div>
-              <h4 className="text-sm font-bold text-red-900">Falha ao buscar indicadores</h4>
-              <p className="text-xs text-red-700">{loadError}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            className="border-red-300 text-red-800 hover:bg-red-100 text-xs shrink-0 rounded-lg h-8"
-          >
-            Tentar novamente
-          </Button>
+        <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-900 rounded-xl">
+          <AlertCircle className="h-4 w-4" />
+          <span>{loadError}</span>
         </Alert>
       )}
 
-      {/* Cards de Métricas / Abas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === 'pending'
-              ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-400/40 shadow-sm'
-              : 'bg-white border-[#e5e0d8] hover:bg-[#faf7f2]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">
-              Pendentes
-            </span>
-            <Clock className="w-4 h-4 text-amber-600" />
-          </div>
-          <p className="text-2xl font-extrabold text-[#0f2a43] mt-2">{counts.pending}</p>
-          <span className="text-[11px] text-gray-500">Aguardando validação</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('approved')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === 'approved'
-              ? 'bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-400/40 shadow-sm'
-              : 'bg-white border-[#e5e0d8] hover:bg-[#faf7f2]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-              Aprovados
-            </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-2xl font-extrabold text-[#0f2a43] mt-2">{counts.approved}</p>
-          <span className="text-[11px] text-gray-500">Com acesso ativo</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('rejected')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === 'rejected'
-              ? 'bg-red-50/70 border-red-300 ring-2 ring-red-400/40 shadow-sm'
-              : 'bg-white border-[#e5e0d8] hover:bg-[#faf7f2]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-red-800 uppercase tracking-wider">
-              Rejeitados
-            </span>
-            <XCircle className="w-4 h-4 text-red-600" />
-          </div>
-          <p className="text-2xl font-extrabold text-[#0f2a43] mt-2">{counts.rejected}</p>
-          <span className="text-[11px] text-gray-500">Com motivo registrado</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === 'all'
-              ? 'bg-blue-50/70 border-blue-300 ring-2 ring-blue-400/40 shadow-sm'
-              : 'bg-white border-[#e5e0d8] hover:bg-[#faf7f2]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#1a5d8f] uppercase tracking-wider">Todos</span>
-            <Users className="w-4 h-4 text-[#1a5d8f]" />
-          </div>
-          <p className="text-2xl font-extrabold text-[#0f2a43] mt-2">{counts.all}</p>
-          <span className="text-[11px] text-gray-500">Total de cadastros</span>
-        </button>
+      {/* 2. REGRA DO NEGÓCIO EM DESTAQUE */}
+      <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-3">
+        <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <span className="font-bold text-emerald-900 text-sm block">
+            Requisito Obrigatório: Unidade Adquirida na Vitacon
+          </span>
+          <p className="text-emerald-800 leading-relaxed">
+            Não existe cadastro público aberto. A administração cadastra cada cliente, vincula a
+            unidade comprada por ele e define o e-mail e senha de acesso. Apenas indicadores
+            marcados como <strong>Autorizados</strong> podem indicar outros clientes.
+          </p>
+        </div>
       </div>
 
-      {/* Barra de Busca e Filtros */}
-      <Card className="border-[#e5e0d8] shadow-sm bg-white">
+      {/* 3. BARRA DE BUSCA E TABS */}
+      <Card className="border-slate-200 shadow-sm bg-white rounded-2xl">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Buscar por nome completo, e-mail, telefone ou CPF..."
+                placeholder="Buscar por nome, e-mail, telefone ou CPF..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-10 rounded-xl border-[#e5e0d8] focus-visible:ring-[#1a5d8f]"
+                className="pl-9 h-10 rounded-xl border-slate-200 focus-visible:ring-emerald-600"
               />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#faf7f2] border border-[#e5e0d8] text-xs font-semibold text-gray-600">
-                <Filter className="w-3.5 h-3.5 text-[#1a5d8f]" />
-                <span>
-                  Exibindo: <strong className="text-[#0f2a43]">{filteredIndicators.length}</strong>
-                </span>
-              </div>
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setActiveTab('all')}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  activeTab === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Todos ({indicators.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('authorized')}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  activeTab === 'authorized'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600'
+                }`}
+              >
+                Autorizados
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('pending')}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  activeTab === 'pending' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Bloqueados / Pendentes
+              </button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Listagem de Indicadores */}
-      <Card className="border-[#e5e0d8] shadow-sm bg-white overflow-hidden">
-        <CardHeader className="border-b border-[#e5e0d8] py-4 px-6 bg-gradient-to-r from-[#faf7f2] to-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#1a5d8f]" />
-              <CardTitle className="text-base font-bold text-[#0f2a43]">
-                {activeTab === 'pending' && 'Indicadores Aguardando Aprovação'}
-                {activeTab === 'approved' && 'Indicadores Aprovados (Ativos)'}
-                {activeTab === 'rejected' && 'Cadastros Rejeitados'}
-                {activeTab === 'all' && 'Todos os Indicadores'}
-              </CardTitle>
-            </div>
-            <span className="text-xs text-gray-500">Fase 2: Gestão Master</span>
-          </div>
-          <CardDescription className="text-xs text-gray-500">
-            A aprovação cria automaticamente a conta de acesso e o perfil de indicador parceiro com
-            forçamento de troca de senha no primeiro acesso.
-          </CardDescription>
+      {/* 4. LISTA DE INDICADORES */}
+      <Card className="border-slate-200 shadow-sm bg-white rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-100 py-4 px-6 bg-slate-50/50">
+          <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-600" />
+            Clientes Indicadores ({filteredIndicators.length})
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="p-0">
           {loading ? (
-            <div className="py-20 text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-[#1a5d8f] animate-spin mx-auto" />
-              <p className="text-sm font-medium text-gray-500">Carregando cadastros...</p>
+            <div className="py-16 text-center text-slate-500 text-sm">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-600 mb-2" />
+              Carregando indicadores...
             </div>
           ) : filteredIndicators.length === 0 ? (
-            <div className="py-16 text-center space-y-3 px-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#faf7f2] border border-[#e5e0d8] flex items-center justify-center mx-auto text-gray-400">
-                <Users className="w-7 h-7" />
-              </div>
-              <p className="text-base font-semibold text-[#0f2a43]">Nenhum indicador encontrado</p>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                {searchTerm
-                  ? 'Nenhum resultado corresponde aos termos da pesquisa.'
-                  : activeTab === 'pending'
-                    ? 'Não há solicitações pendentes de aprovação no momento.'
-                    : 'Nenhum registro para esta categoria.'}
-              </p>
+            <div className="py-16 text-center text-slate-500 text-sm">
+              Nenhum cliente indicador localizado.
             </div>
           ) : (
-            <div className="divide-y divide-[#e5e0d8]">
-              {filteredIndicators.map((item) => {
-                const status = item.approval_status || (item.approved ? 'approved' : 'pending')
+            <div className="divide-y divide-slate-100">
+              {filteredIndicators.map((ind) => {
+                const isAuth = ind.autorizado !== false && ind.approved !== false
+                const empNome = ind.expand?.empreendimento_id?.nome || 'Vitacon'
+                const uniNome =
+                  ind.expand?.unidade_comprada_id?.identificacao ||
+                  ind.unidade_descricao ||
+                  'Unidade cadastrada'
+
                 return (
                   <div
-                    key={item.id}
-                    className="p-5 sm:p-6 hover:bg-[#faf7f2]/60 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                    key={ind.id}
+                    className="p-5 sm:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-slate-50/80 transition-colors"
                   >
-                    {/* Dados do Indicador */}
-                    <div className="space-y-2 flex-1 min-w-0">
+                    <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-bold text-[#0f2a43] text-base truncate">
-                          {item.full_name}
-                        </h3>
-                        {status === 'pending' && (
-                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Pendente
-                          </Badge>
+                        <span className="font-extrabold text-base text-slate-900">
+                          {ind.full_name}
+                        </span>
+                        <Badge
+                          className={`text-xs font-semibold ${
+                            isAuth
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : 'bg-amber-100 text-amber-800 border-amber-300'
+                          }`}
+                        >
+                          {isAuth ? 'Autorizado a Indicar' : 'Não Autorizado'}
+                        </Badge>
+                      </div>
+
+                      {/* Contato e CPF */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                        {ind.email && (
+                          <span className="flex items-center gap-1 font-medium text-slate-700">
+                            <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            {ind.email}
+                          </span>
                         )}
-                        {status === 'approved' && (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
-                            <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Aprovado
-                          </Badge>
+                        {ind.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            {formatPhone(ind.phone)}
+                          </span>
                         )}
-                        {status === 'rejected' && (
-                          <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Rejeitado
-                          </Badge>
+                        {ind.cpf_cnpj && (
+                          <span className="flex items-center gap-1">
+                            <span className="font-semibold">CPF:</span>
+                            {formatCPF(ind.cpf_cnpj)}
+                          </span>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600 pt-1">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate">{item.email || 'Não informado'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span>{item.phone || 'Não informado'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span>CPF: {item.cpf_cnpj || 'Não informado'}</span>
-                        </div>
-                        {item.rg && (
-                          <div className="flex items-center gap-1.5">
-                            <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span>RG: {item.rg}</span>
-                          </div>
-                        )}
-                        {item.address && (
-                          <div className="flex items-center gap-1.5 sm:col-span-2 truncate">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="truncate">{item.address}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 text-gray-400">
-                          <Calendar className="w-3.5 h-3.5 shrink-0" />
-                          <span>Cadastrado em: {formatDate(item.created)}</span>
-                        </div>
-                      </div>
-
-                      {/* Motivo da Rejeição (se rejeitado) */}
-                      {status === 'rejected' && item.rejection_reason && (
-                        <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800">
-                          <strong className="font-semibold block mb-0.5">
-                            Motivo da Rejeição:
+                      {/* Unidade Comprada pelo Cliente Indicador */}
+                      <div className="pt-1 flex items-center gap-1.5 text-xs text-emerald-900 font-semibold">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>
+                          Unidade Comprada:{' '}
+                          <strong className="text-slate-900">
+                            {empNome} — {uniNome}
                           </strong>
-                          <span>{item.rejection_reason}</span>
-                        </div>
-                      )}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Ações */}
-                    <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
+                    {/* Ações Master */}
+                    <div className="flex items-center gap-2 shrink-0">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => setViewingItem(item)}
-                        className="text-gray-600 hover:text-[#1a5d8f] hover:bg-white rounded-xl h-9 px-3"
+                        onClick={() => void handleToggleAutorizacao(ind)}
+                        className={`text-xs h-9 px-3 rounded-xl border ${
+                          isAuth
+                            ? 'text-amber-800 border-amber-300 hover:bg-amber-50'
+                            : 'text-emerald-800 border-emerald-300 hover:bg-emerald-50'
+                        }`}
                       >
-                        <Eye className="w-4 h-4 mr-1.5" />
-                        Detalhes
+                        {isAuth ? 'Desautorizar' : 'Autorizar'}
                       </Button>
 
-                      {status === 'pending' && (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setApprovingItem(item)
-                              setApprovalResult(null)
-                              setApprovalError(null)
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl h-9 px-3.5 shadow-sm"
-                          >
-                            <Check className="w-4 h-4 mr-1.5" />
-                            Aprovar
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setRejectingItem(item)
-                              setRejectionReason('')
-                              setRejectionError(null)
-                            }}
-                            className="border-red-300 text-red-700 hover:bg-red-50 rounded-xl h-9 px-3.5"
-                          >
-                            <X className="w-4 h-4 mr-1.5" />
-                            Rejeitar
-                          </Button>
-                        </>
-                      )}
-
-                      {status === 'rejected' && (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setApprovingItem(item)
-                            setApprovalResult(null)
-                            setApprovalError(null)
-                          }}
-                          className="bg-[#1a5d8f] hover:bg-[#144a72] text-white font-semibold rounded-xl h-9 px-3.5"
-                        >
-                          <Check className="w-4 h-4 mr-1.5" />
-                          Reavaliar e Aprovar
-                        </Button>
-                      )}
-
-                      {status === 'approved' && (
-                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                          Conta Vinculada
-                        </span>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenModal(ind)}
+                        className="text-xs h-9 px-3 rounded-xl border-slate-200"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 mr-1" />
+                        Editar / Senha
+                      </Button>
                     </div>
                   </div>
                 )
@@ -570,333 +453,212 @@ export default function AdminIndicadores() {
         </CardContent>
       </Card>
 
-      {/* MODAL 1: APROVAÇÃO E GERAÇÃO DE SENHA TEMPORÁRIA */}
-      <Dialog
-        open={Boolean(approvingItem)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setApprovingItem(null)
-            setApprovalResult(null)
-            setApprovalError(null)
-            setCopiedPassword(false)
-          }
-        }}
-      >
-        <DialogContent className="max-w-md bg-white rounded-2xl border-[#e5e0d8]">
+      {/* MODAL CADASTRAR / EDITAR INDICADOR */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-[#0f2a43] flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span>Aprovação de Indicador</span>
+            <DialogTitle>
+              {editingItem ? 'Editar Cliente Indicador' : 'Novo Cliente Indicador Vitacon'}
             </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Esta ação criará a conta de acesso e o perfil do indicador com senha temporária.
+            <DialogDescription>
+              Insira o cadastro, vincule a unidade adquirida e defina a senha de acesso.
             </DialogDescription>
           </DialogHeader>
 
-          {!approvalResult ? (
-            /* Confirmação Prévia */
-            <div className="space-y-4 py-2">
-              {approvalError && (
-                <Alert className="bg-red-50 border-red-200 text-red-800 rounded-xl">
-                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-                  <AlertDescription className="text-xs font-medium">
-                    {approvalError}
-                  </AlertDescription>
-                </Alert>
+          {createdCredentials ? (
+            <div className="py-4 space-y-4">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h3 className="font-bold text-emerald-950 text-base">
+                  Indicador Cadastrado com Sucesso!
+                </h3>
+                <p className="text-xs text-emerald-800">
+                  Envie as credenciais abaixo para o cliente acessar a plataforma Vitacon:
+                </p>
+                <div className="p-3 bg-white rounded-lg border border-emerald-200 text-left font-mono text-xs space-y-1">
+                  <p>
+                    <strong>Login / E-mail:</strong> {createdCredentials.email}
+                  </p>
+                  <p>
+                    <strong>Senha:</strong> {createdCredentials.pass}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => {
+                  setModalOpen(false)
+                  setCreatedCredentials(null)
+                }}
+                className="w-full bg-emerald-600 text-white font-bold"
+              >
+                Concluir
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleSaveIndicator} className="space-y-4 py-2">
+              {modalError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+                  {modalError}
+                </div>
               )}
 
-              <div className="p-4 rounded-xl bg-[#faf7f2] border border-[#e5e0d8] space-y-2 text-xs">
-                <p>
-                  <strong>Nome:</strong> {approvingItem?.full_name}
-                </p>
-                <p>
-                  <strong>E-mail:</strong> {approvingItem?.email}
-                </p>
-                <p>
-                  <strong>Telefone:</strong> {approvingItem?.phone}
-                </p>
-                <p>
-                  <strong>CPF:</strong> {approvingItem?.cpf_cnpj}
-                </p>
+              {/* NOME E EMAIL */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Nome Completo *</label>
+                <Input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Ex.: Carlos Alberto Souza"
+                  required
+                />
               </div>
 
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <KeyRound className="w-4 h-4 text-amber-600" />
-                  Aviso (Fase 2 sem e-mail automático):
-                </p>
-                <p className="leading-relaxed">
-                  A senha temporária gerada será exibida na tela a seguir para que você possa copiar
-                  e enviar ao parceiro pelo WhatsApp. O envio automático de e-mail será ativado na
-                  Fase 3.
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">E-mail de Login *</label>
+                  <Input
+                    type="email"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="carlos@exemplo.com"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Telefone / WhatsApp</label>
+                  <Input
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(formatPhone(e.target.value))}
+                    placeholder="(11) 98765-4321"
+                  />
+                </div>
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-0 pt-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setApprovingItem(null)}
-                  disabled={isApproving}
-                  className="border-[#e5e0d8] text-gray-700 rounded-xl"
-                >
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">CPF / Cadastro</label>
+                <Input
+                  value={formCpf}
+                  onChange={(e) => setFormCpf(formatCPF(e.target.value))}
+                  placeholder="123.456.789-00"
+                />
+              </div>
+
+              {/* UNIDADE COMPRADA (REQUISITO FUNDAMENTAL) */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
+                  <KeyRound className="w-4 h-4 text-emerald-600" />
+                  <span>Unidade Vitacon Adquirida pelo Indicador</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-600">
+                      Empreendimento
+                    </label>
+                    <select
+                      value={formEmpId}
+                      onChange={(e) => {
+                        setFormEmpId(e.target.value)
+                        setFormUniId('')
+                      }}
+                      className="w-full h-9 px-2 text-xs rounded-lg border border-slate-200 bg-white"
+                    >
+                      <option value="">Selecione o empreendimento...</option>
+                      {empreendimentos.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-600">
+                      Unidade Comprada
+                    </label>
+                    <select
+                      value={formUniId}
+                      onChange={(e) => setFormUniId(e.target.value)}
+                      disabled={!formEmpId}
+                      className="w-full h-9 px-2 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-50"
+                    >
+                      <option value="">
+                        {formEmpId ? 'Selecione a unidade...' : 'Escolha o empreendimento'}
+                      </option>
+                      {unidades
+                        .filter((u) => u.empreendimento_id === formEmpId)
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.identificacao}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Descrição da unidade (caso não esteja na lista)
+                  </label>
+                  <Input
+                    value={formUniDesc}
+                    onChange={(e) => setFormUniDesc(e.target.value)}
+                    placeholder="Ex.: Apto 804 - Torre A (Contrato assinado 2024)"
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* SENHA E AUTORIZAÇÃO */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">
+                    {editingItem ? 'Nova Senha (opcional)' : 'Senha Inicial *'}
+                  </label>
+                  <Input
+                    type="text"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder={editingItem ? 'Manter atual' : 'Vitacon@2026'}
+                    required={!editingItem}
+                  />
+                </div>
+
+                <div className="space-y-1.5 flex flex-col justify-end">
+                  <label className="text-xs font-bold text-slate-700 mb-1">
+                    Status de Autorização
+                  </label>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formAutorizado}
+                      onChange={(e) => setFormAutorizado(e.target.checked)}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="font-semibold text-slate-800">Autorizado a indicar</span>
+                  </label>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-3">
+                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </Button>
                 <Button
-                  onClick={handleConfirmApproval}
-                  disabled={isApproving}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md"
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-emerald-600 text-white font-bold"
                 >
-                  {isApproving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Aprovando...
-                    </>
-                  ) : (
-                    'Confirmar Aprovação'
-                  )}
+                  {isSubmitting
+                    ? 'Salvando...'
+                    : editingItem
+                      ? 'Salvar Alterações'
+                      : 'Criar Indicador'}
                 </Button>
               </DialogFooter>
-            </div>
-          ) : (
-            /* Sucesso: Exibição da Senha Temporária com Botão Copiar */
-            <div className="space-y-5 py-2">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                  <Check className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-bold text-[#0f2a43]">
-                  Indicador Aprovado com Sucesso!
-                </h3>
-                <p className="text-xs text-gray-500">
-                  A conta foi criada e vinculada. Copie a senha temporária abaixo para fornecer ao
-                  indicador.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#0f2a43] text-white space-y-3 shadow-inner">
-                <div>
-                  <span className="text-[11px] text-gray-300 block font-medium">
-                    E-mail de Login:
-                  </span>
-                  <span className="text-sm font-bold text-[#d9995b]">{approvalResult.email}</span>
-                </div>
-
-                <div className="pt-2 border-t border-white/10">
-                  <span className="text-[11px] text-gray-300 block font-medium">
-                    Senha Temporária:
-                  </span>
-                  <div className="flex items-center justify-between gap-2 mt-1 bg-white/10 p-2.5 rounded-xl border border-white/15">
-                    <code className="text-base font-mono font-bold text-white tracking-wider">
-                      {approvalResult.temp_password}
-                    </code>
-                    <Button
-                      size="sm"
-                      onClick={handleCopyPassword}
-                      className="bg-[#1a5d8f] hover:bg-[#144a72] text-white rounded-lg h-8 px-3 font-semibold text-xs"
-                    >
-                      {copiedPassword ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 mr-1 text-emerald-300" />
-                          Copiada!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 mr-1" />
-                          Copiar Senha
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
-                <p className="leading-relaxed">
-                  Ao realizar o primeiro login com esta senha, o sistema exigirá obrigatoriamente
-                  que o indicador defina sua própria senha pessoal definitiva.
-                </p>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  onClick={() => {
-                    setApprovingItem(null)
-                    setApprovalResult(null)
-                  }}
-                  className="w-full bg-[#1a5d8f] hover:bg-[#144a72] text-white font-semibold rounded-xl"
-                >
-                  Concluir e Fechar
-                </Button>
-              </DialogFooter>
-            </div>
+            </form>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 2: REJEIÇÃO COM MOTIVO OBRIGATÓRIO */}
-      <Dialog
-        open={Boolean(rejectingItem)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRejectingItem(null)
-            setRejectionReason('')
-            setRejectionError(null)
-          }
-        }}
-      >
-        <DialogContent className="max-w-md bg-white rounded-2xl border-[#e5e0d8]">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-red-700 flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-red-600" />
-              <span>Rejeitar Cadastro de Indicador</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Informe o motivo detalhado para justificar a recusa desta solicitação.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {rejectionError && (
-              <Alert className="bg-red-50 border-red-200 text-red-800 rounded-xl">
-                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-                <AlertDescription className="text-xs font-medium">
-                  {rejectionError}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="p-3 rounded-xl bg-[#faf7f2] border border-[#e5e0d8] text-xs">
-              <p>
-                <strong>Indicador:</strong> {rejectingItem?.full_name}
-              </p>
-              <p>
-                <strong>CPF:</strong> {rejectingItem?.cpf_cnpj}
-              </p>
-              <p>
-                <strong>E-mail:</strong> {rejectingItem?.email}
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="rejection-reason" className="text-xs font-bold text-[#1f2933]">
-                Motivo da Rejeição <span className="text-red-500">* (Obrigatório)</span>
-              </Label>
-              <Textarea
-                id="rejection-reason"
-                placeholder="Ex: Documento de identidade divergente ou CPF inválido; ou área geográfica fora da cobertura..."
-                rows={4}
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="rounded-xl border-[#e5e0d8] focus-visible:ring-red-500 text-xs"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setRejectingItem(null)}
-              disabled={isRejecting}
-              className="border-[#e5e0d8] text-gray-700 rounded-xl"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleConfirmRejection}
-              disabled={isRejecting || !rejectionReason.trim()}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-md"
-            >
-              {isRejecting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Rejeitando...
-                </>
-              ) : (
-                'Confirmar Rejeição'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 3: VISUALIZAR DETALHES COMPLETOS */}
-      <Dialog
-        open={Boolean(viewingItem)}
-        onOpenChange={(open) => {
-          if (!open) setViewingItem(null)
-        }}
-      >
-        <DialogContent className="max-w-lg bg-white rounded-2xl border-[#e5e0d8]">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-[#0f2a43] flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#1a5d8f]" />
-              <span>Ficha Completa do Indicador</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Dados cadastrados no formulário de parceria.
-            </DialogDescription>
-          </DialogHeader>
-
-          {viewingItem && (
-            <div className="space-y-4 py-2 text-xs">
-              <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-[#faf7f2] border border-[#e5e0d8]">
-                <div>
-                  <span className="text-gray-500 block">Nome Completo:</span>
-                  <span className="font-bold text-[#0f2a43] text-sm">{viewingItem.full_name}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Status de Aprovação:</span>
-                  <span className="font-bold text-[#1a5d8f] uppercase">
-                    {viewingItem.approval_status || (viewingItem.approved ? 'approved' : 'pending')}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">E-mail:</span>
-                  <span className="font-semibold">{viewingItem.email || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Telefone:</span>
-                  <span className="font-semibold">{viewingItem.phone || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">CPF:</span>
-                  <span className="font-semibold">{viewingItem.cpf_cnpj || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">RG:</span>
-                  <span className="font-semibold">{viewingItem.rg || '-'}</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-gray-500 block">Endereço Residencial:</span>
-                  <span className="font-semibold">{viewingItem.address || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Data de Solicitação:</span>
-                  <span className="font-semibold">{formatDate(viewingItem.created)}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">ID do Registro:</span>
-                  <code className="text-[11px] text-gray-600">{viewingItem.id}</code>
-                </div>
-              </div>
-
-              {viewingItem.rejection_reason && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800">
-                  <strong className="font-semibold block mb-1">Motivo da Rejeição:</strong>
-                  <span>{viewingItem.rejection_reason}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              onClick={() => setViewingItem(null)}
-              className="bg-[#1a5d8f] text-white rounded-xl"
-            >
-              Fechar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

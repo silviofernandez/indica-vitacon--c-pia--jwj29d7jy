@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T12:29:02.665Z",
+  "generatedAt": "2026-10-02T13:51:32.846Z",
   "collections": [
     {
       "name": "users",
@@ -43,6 +43,1168 @@
         "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
         "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
       ]
+    },
+    {
+      "name": "teams",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "leader_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_teams_leader ON teams (leader_id)",
+        "CREATE INDEX `idx_teams_active` ON `teams` (active)"
+      ]
+    },
+    {
+      "name": "profiles",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "role",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["indicador", "master", "operator", "manager"]
+        },
+        {
+          "name": "team_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "teams"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "must_change_password",
+          "type": "bool",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_profiles_user ON profiles (user_id)",
+        "CREATE INDEX idx_profiles_role ON profiles (role)",
+        "CREATE INDEX idx_profiles_team ON profiles (team_id)"
+      ]
+    },
+    {
+      "name": "indicators",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && (@collection.profiles.role ?= 'master' || @collection.profiles.role ?= 'operator' || @collection.profiles.role ?= 'manager')))",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && (@collection.profiles.role ?= 'master' || @collection.profiles.role ?= 'operator' || @collection.profiles.role ?= 'manager')))",
+        "create": "",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "delete": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cpf_cnpj",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_key_type",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["cpf", "cnpj", "email", "phone", "random"]
+        },
+        {
+          "name": "bank_info",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "email",
+          "type": "email",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "rg",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "approval_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pending", "approved", "rejected"]
+        },
+        {
+          "name": "rejection_reason",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "profile_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profiles"
+        },
+        {
+          "name": "unidade_comprada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "unidades"
+        },
+        {
+          "name": "empreendimento_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "empreendimentos"
+        },
+        {
+          "name": "unidade_descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autorizado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_indicators_user ON indicators (user_id)",
+        "CREATE INDEX idx_indicators_approved ON indicators (approved)",
+        "CREATE INDEX `idx_indicators_approval_status` ON `indicators` (approval_status)",
+        "CREATE INDEX `idx_indicators_email` ON `indicators` (email)",
+        "CREATE INDEX `idx_indicators_cpf` ON `indicators` (cpf_cnpj)"
+      ]
+    },
+    {
+      "name": "team_members",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "team_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "teams"
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "role_in_team",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["leader", "member"]
+        },
+        {
+          "name": "joined_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_team_members_team ON team_members (team_id)",
+        "CREATE INDEX idx_team_members_user ON team_members (user_id)",
+        "CREATE UNIQUE INDEX `uk_team_user` ON `team_members` (team_id, user_id)"
+      ]
+    },
+    {
+      "name": "referrals",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (assigned_manager_id = @request.auth.id || assigned_to = @request.auth.id || (assigned_team_id != '' && assigned_team_id = @collection.profiles.team_id) || @collection.team_members.user_id ?= assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "view": "@request.auth.id != '' && (indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (assigned_manager_id = @request.auth.id || assigned_to = @request.auth.id || (assigned_team_id != '' && assigned_team_id = @collection.profiles.team_id) || @collection.team_members.user_id ?= assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "create": "@request.auth.id != '' && (indicator_id.user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "indicator_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "indicators"
+        },
+        {
+          "name": "client_name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "client_phone",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "client_email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "property_description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "property_type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["rental", "sale", "vitacon", "buyer"]
+        },
+        {
+          "name": "expected_value",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "sent",
+            "in_analysis",
+            "in_progress",
+            "visited",
+            "negotiating",
+            "closed_won",
+            "closed_lost",
+            "paid",
+            "cancelled",
+            "expired",
+            "bonus_paid"
+          ]
+        },
+        {
+          "name": "assigned_to",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "raw_transcription",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sla_deadline",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "assigned_team_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "teams"
+        },
+        {
+          "name": "assigned_manager_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "assigned_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "assigned_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deal_value",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sla_breached",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "empreendimento_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "empreendimentos"
+        },
+        {
+          "name": "unidade_escolhida_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "unidades"
+        },
+        {
+          "name": "estagio",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "lead_enviado",
+            "reuniao_realizada",
+            "gostou",
+            "ficou_de_pensar",
+            "proposta",
+            "fechamento"
+          ]
+        },
+        {
+          "name": "valor_compra",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "comissao_calculada",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "comissao_regra_aplicada",
+          "type": "text",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_referrals_indicator ON referrals (indicator_id)",
+        "CREATE INDEX idx_referrals_status ON referrals (status)",
+        "CREATE INDEX idx_referrals_assigned ON referrals (assigned_to)",
+        "CREATE INDEX `idx_referrals_property_type` ON `referrals` (property_type)",
+        "CREATE INDEX `idx_referrals_sla_deadline` ON `referrals` (sla_deadline)",
+        "CREATE INDEX `idx_referrals_assigned_team` ON `referrals` (assigned_team_id)",
+        "CREATE INDEX `idx_referrals_assigned_manager` ON `referrals` (assigned_manager_id)",
+        "CREATE INDEX `idx_referrals_sla_breached` ON `referrals` (sla_breached)"
+      ]
+    },
+    {
+      "name": "referral_status_history",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (referral_id.indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (referral_id.assigned_manager_id = @request.auth.id || referral_id.assigned_to = @request.auth.id || (referral_id.assigned_team_id != '' && referral_id.assigned_team_id = @collection.profiles.team_id) || @collection.team_members.user_id ?= referral_id.assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "view": "@request.auth.id != '' && (referral_id.indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (referral_id.assigned_manager_id = @request.auth.id || referral_id.assigned_to = @request.auth.id || (referral_id.assigned_team_id != '' && referral_id.assigned_team_id = @collection.profiles.team_id) || @collection.team_members.user_id ?= referral_id.assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && (@collection.profiles.role ?= 'master' || @collection.profiles.role ?= 'operator')",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "referral_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "referrals"
+        },
+        {
+          "name": "old_status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "new_status",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "changed_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "notified",
+          "type": "bool",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_refhist_referral ON referral_status_history (referral_id)",
+        "CREATE INDEX idx_refhist_changedby ON referral_status_history (changed_by)",
+        "CREATE INDEX `idx_refhist_notified` ON `referral_status_history` (notified)"
+      ]
+    },
+    {
+      "name": "bonuses",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (referral_id.assigned_to = @request.auth.id || @collection.team_members.user_id ?= referral_id.assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "view": "@request.auth.id != '' && (indicator_id.user_id = @request.auth.id || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'operator') || (@collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'manager' && (referral_id.assigned_to = @request.auth.id || @collection.team_members.user_id ?= referral_id.assigned_to)) || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "referral_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "referrals"
+        },
+        {
+          "name": "indicator_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "indicators"
+        },
+        {
+          "name": "bonus_type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["rental_fixed", "buyer_percent", "sale_percent", "vitacon_percent"]
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pending", "approved", "paid"]
+        },
+        {
+          "name": "paid_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "payment_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pending", "paid", "cancelled"]
+        },
+        {
+          "name": "is_vitacon",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "recipient_type",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["indicator", "referred"]
+        },
+        {
+          "name": "payment_notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_key_used",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deal_value",
+          "type": "number",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_bonuses_referral ON bonuses (referral_id)",
+        "CREATE INDEX idx_bonuses_indicator ON bonuses (indicator_id)",
+        "CREATE INDEX idx_bonuses_status ON bonuses (status)",
+        "CREATE INDEX `idx_bonuses_payment_status` ON `bonuses` (payment_status)",
+        "CREATE INDEX `idx_bonuses_is_vitacon` ON `bonuses` (is_vitacon)"
+      ]
+    },
+    {
+      "name": "bonus_settings",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_bonus_settings_key ON bonus_settings (key)"]
+    },
+    {
+      "name": "notifications_log",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || (@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'))",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "referral_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "referrals"
+        },
+        {
+          "name": "type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "message",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "read",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "channel",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["email", "whatsapp"]
+        },
+        {
+          "name": "event_type",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "registration_received",
+            "approved_credentials",
+            "status_changed",
+            "bonus_paid",
+            "monthly_payment_reminder"
+          ]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sent", "failed", "skipped"]
+        },
+        {
+          "name": "recipient",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "related_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "indicators"
+        },
+        {
+          "name": "error_message",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "payload_json",
+          "type": "json",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_notif_user ON notifications_log (user_id)",
+        "CREATE INDEX idx_notif_referral ON notifications_log (referral_id)",
+        "CREATE INDEX idx_notif_read ON notifications_log (read)",
+        "CREATE INDEX `idx_notif_channel` ON `notifications_log` (channel)",
+        "CREATE INDEX `idx_notif_event_type` ON `notifications_log` (event_type)",
+        "CREATE INDEX `idx_notif_status` ON `notifications_log` (status)",
+        "CREATE INDEX `idx_notif_related` ON `notifications_log` (related_id)"
+      ]
+    },
+    {
+      "name": "reports",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (owner = @request.auth.id || @request.auth.email = 'gabsilvio@gmail.com')",
+        "view": "@request.auth.id != '' && (owner = @request.auth.id || @request.auth.email = 'gabsilvio@gmail.com')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && (owner = @request.auth.id || @request.auth.email = 'gabsilvio@gmail.com')",
+        "delete": "@request.auth.id != '' && (owner = @request.auth.id || @request.auth.email = 'gabsilvio@gmail.com')"
+      },
+      "fields": [
+        {
+          "name": "owner",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "kind",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["indicator", "financial"]
+        },
+        {
+          "name": "format",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pdf", "excel"]
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "metadata",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_reports_owner ON reports (owner)",
+        "CREATE INDEX idx_reports_kind ON reports (kind)",
+        "CREATE INDEX idx_reports_format ON reports (format)",
+        "CREATE INDEX idx_reports_created ON reports (created DESC)"
+      ]
+    },
+    {
+      "name": "empreendimentos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "bairro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_obra",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_empreendimentos_nome ON empreendimentos (nome)"]
+    },
+    {
+      "name": "unidades",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "empreendimento_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "empreendimentos"
+        },
+        {
+          "name": "identificacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "torre",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "metragem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["disponivel", "vendida", "reservada"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_unidades_emp ON unidades (empreendimento_id)",
+        "CREATE INDEX idx_unidades_ident ON unidades (identificacao)"
+      ]
+    },
+    {
+      "name": "config_recompensa",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "update": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'",
+        "delete": "@request.auth.id != '' && @collection.profiles.user_id ?= @request.auth.id && @collection.profiles.role ?= 'master'"
+      },
+      "fields": [
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["percentual", "valor_fixo"]
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
-  "name": "Indica Gabriel — Imobiliária Gabriel",
-  "short_name": "Indica Gabriel",
-  "description": "Plataforma de indicações imobiliárias da Imobiliária Gabriel. Indique imóveis e ganhe bonificações.",
+  "name": "Programa de Indicação Vitacon",
+  "short_name": "Vitacon Indica",
+  "description": "Programa oficial de indicação para clientes com unidades Vitacon adquiridas.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

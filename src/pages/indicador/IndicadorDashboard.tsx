@@ -2,26 +2,24 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   PlusCircle,
-  Sparkles,
-  Clock,
+  Building2,
+  Home,
   CheckCircle2,
   DollarSign,
   Send,
-  Building2,
-  Home,
-  Tag,
   AlertCircle,
-  HelpCircle,
   RefreshCw,
   Search,
-  ChevronRight,
   TrendingUp,
   Wallet,
   Phone,
+  Mail,
   Calendar,
-  XCircle,
-  Info,
-  FileText,
+  Sparkles,
+  KeyRound,
+  ShieldCheck,
+  Check,
+  Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,17 +28,19 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  getIndicatorDashboardData,
+  listIndicatorReferrals,
+  getLoggedInIndicator,
   type ReferralRecord,
-  type BonusRecord,
-  type IndicatorSummary,
 } from '@/services/referrals'
 import { formatPhone } from '@/services/indicators'
+import {
+  getConfigRecompensa,
+  calculateReward,
+  getEstagioMeta,
+  ESTAGIOS_VITACON,
+  type ConfigRecompensaRecord,
+} from '@/services/vitacon'
 
-/**
- * Mapeamento e rótulos leigos para cada status de indicação.
- * Nenhum jargão técnico (nada de RLS, SLA, status code).
- */
 export interface StatusConfig {
   label: string
   description: string
@@ -51,113 +51,31 @@ export interface StatusConfig {
 
 export function getStatusConfig(status?: string): StatusConfig {
   const s = (status || '').toLowerCase().trim()
-
-  switch (s) {
-    case 'sent':
-      return {
-        label: 'Aguardando análise',
-        description: 'Recebemos sua indicação e já iniciamos a verificação.',
-        badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
-        dotClass: 'bg-amber-500',
-        icon: Clock,
-      }
-    case 'in_analysis':
-    case 'in_progress':
-      return {
-        label: 'Em andamento',
-        description: 'Nossa equipe está entrando em contato com o cliente.',
-        badgeClass: 'bg-blue-100 text-[#1a5d8f] border-blue-300',
-        dotClass: 'bg-[#1a5d8f]',
-        icon: RefreshCw,
-      }
-    case 'visited':
-      return {
-        label: 'Visita agendada',
-        description: 'O cliente está em fase de visita aos imóveis.',
-        badgeClass: 'bg-purple-100 text-purple-800 border-purple-300',
-        dotClass: 'bg-purple-500',
-        icon: Building2,
-      }
-    case 'negotiating':
-      return {
-        label: 'Em negociação',
-        description: 'Proposta em elaboração ou fechamento de contrato.',
-        badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-        dotClass: 'bg-indigo-500',
-        icon: TrendingUp,
-      }
-    case 'closed_won':
-    case 'closed':
-      return {
-        label: 'Concluída com sucesso',
-        description: 'Negócio fechado! O processo de bonificação foi iniciado.',
-        badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-        dotClass: 'bg-emerald-500',
-        icon: CheckCircle2,
-      }
-    case 'paid':
-    case 'bonus_paid':
-      return {
-        label: 'Bonificação paga',
-        description: 'O valor da sua recompensa já foi depositado via PIX.',
-        badgeClass: 'bg-emerald-600 text-white border-emerald-600',
-        dotClass: 'bg-white',
-        icon: DollarSign,
-      }
-    case 'closed_lost':
-    case 'cancelled':
-      return {
-        label: 'Cancelada',
-        description: 'O cliente não deu continuidade no momento.',
-        badgeClass: 'bg-gray-100 text-gray-700 border-gray-300',
-        dotClass: 'bg-gray-400',
-        icon: XCircle,
-      }
-    case 'expired':
-      return {
-        label: 'Expirada',
-        description: 'O prazo desta oportunidade encerrou sem contato.',
-        badgeClass: 'bg-stone-100 text-stone-700 border-stone-300',
-        dotClass: 'bg-stone-400',
-        icon: Clock,
-      }
-    default:
-      return {
-        label: 'Em análise',
-        description: 'Sua indicação está sendo processada pela equipe.',
-        badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
-        dotClass: 'bg-blue-500',
-        icon: Clock,
-      }
+  if (s === 'closed_won' || s === 'closed' || s === 'fechamento') {
+    return {
+      label: 'Compra Fechada',
+      description: 'Negócio fechado e contrato assinado na Vitacon!',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      dotClass: 'bg-emerald-500',
+      icon: CheckCircle2,
+    }
+  }
+  return {
+    label: 'Em Negociação',
+    description: 'Atendimento comercial ativo com o cliente.',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
+    dotClass: 'bg-blue-500',
+    icon: TrendingUp,
   }
 }
 
-/**
- * Tradução amigável dos tipos de imóveis
- */
 export function getPropertyTypeLabel(type?: string): {
   label: string
   icon: React.ComponentType<{ className?: string }>
 } {
-  const t = (type || '').toLowerCase().trim()
-  if (t === 'vitacon' || t.includes('vitacon')) {
-    return { label: 'Vitacon SP', icon: Sparkles }
-  }
-  if (t === 'rental' || t.includes('alug')) {
-    return { label: 'Imóvel para alugar', icon: Home }
-  }
-  if (t === 'buyer' || t.includes('compra')) {
-    return { label: 'Comprador', icon: Tag }
-  }
-  if (t === 'sale' || t.includes('venda')) {
-    return { label: 'Imóvel para vender', icon: Building2 }
-  }
-  return { label: 'Oportunidade Imobiliária', icon: Home }
+  return { label: 'Vitacon SP', icon: Sparkles }
 }
 
-/**
- * Formata valores em R$ padrão pt-BR
- */
 export function formatCurrency(value?: number): string {
   const val = Number(value) || 0
   return val.toLocaleString('pt-BR', {
@@ -166,9 +84,6 @@ export function formatCurrency(value?: number): string {
   })
 }
 
-/**
- * Formata data legível (ex: 28 out 2026, 14:20)
- */
 export function formatDateTime(isoString?: string): string {
   if (!isoString) return ''
   try {
@@ -178,62 +93,17 @@ export function formatDateTime(isoString?: string): string {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     })
   } catch {
     return ''
   }
 }
 
-/**
- * Formata o prazo de contato (SLA de 3 horas) em linguagem simples e leiga.
- * Exemplo: "Prazo de contato: até hoje às 17:30" ou "Prazo de contato: até 17:30"
- */
 export function formatSlaNotice(
   slaDeadline?: string,
   status?: string,
 ): { text: string; isPast: boolean } | null {
-  // Apenas relevante se a indicação estiver pendente/recente (sent ou in_analysis)
-  const s = (status || '').toLowerCase()
-  if (s !== 'sent' && s !== 'in_analysis') {
-    return null
-  }
-  if (!slaDeadline) return null
-
-  try {
-    const deadline = new Date(slaDeadline)
-    if (isNaN(deadline.getTime())) return null
-
-    const now = new Date()
-    const isPast = deadline.getTime() < now.getTime()
-
-    const timeStr = deadline.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-
-    const isToday =
-      deadline.getDate() === now.getDate() &&
-      deadline.getMonth() === now.getMonth() &&
-      deadline.getFullYear() === now.getFullYear()
-
-    if (isPast) {
-      return {
-        text: 'Nossa equipe está finalizando a triagem com prioridade.',
-        isPast: true,
-      }
-    }
-
-    return {
-      text: isToday
-        ? `Prazo de contato: até ${timeStr}`
-        : `Prazo de contato: até ${deadline.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} às ${timeStr}`,
-      isPast: false,
-    }
-  } catch {
-    return null
-  }
+  return null
 }
 
 export default function IndicadorDashboard() {
@@ -242,39 +112,58 @@ export default function IndicadorDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [data, setData] = useState<IndicatorSummary>({
-    totalReferrals: 0,
-    inProgressCount: 0,
-    closedCount: 0,
-    totalBonusAccumulated: 0,
-    totalBonusPaid: 0,
-    totalBonusPending: 0,
-    referrals: [],
-    bonuses: [],
+
+  // Dados do indicador logado (inclui unidade adquirida pelo indicador)
+  const [indicatorProfile, setIndicatorProfile] = useState<{
+    id: string
+    full_name: string
+    autorizado?: boolean
+    unidade_descricao?: string
+    unidade_comprada_id?: string
+    expand?: {
+      empreendimento_id?: { nome: string }
+      unidade_comprada_id?: { identificacao: string; torre?: string; valor?: number }
+    }
+  } | null>(null)
+
+  const [referrals, setReferrals] = useState<ReferralRecord[]>([])
+  const [rewardConfig, setRewardConfig] = useState<ConfigRecompensaRecord>({
+    id: '',
+    tipo: 'percentual',
+    valor: 1,
+    descricao: '1% de comissão padrão Vitacon',
+    ativo: true,
   })
 
-  // Filtros de busca e abas
+  // Filtros
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'closed' | 'paid'>(
-    'all',
-  )
+  const [activeTab, setActiveTab] = useState<'all' | 'andamento' | 'fechamento'>('all')
 
   const loadData = useCallback(
     async (isRefresh = false) => {
-      if (isRefresh) {
-        setIsRefreshing(true)
-      } else {
-        setIsLoading(true)
-      }
+      if (isRefresh) setIsRefreshing(true)
+      else setIsLoading(true)
 
       try {
         setErrorMessage(null)
-        const summary = await getIndicatorDashboardData(user?.id)
-        setData(summary)
+        const [config, ind] = await Promise.all([
+          getConfigRecompensa(),
+          user?.id ? getLoggedInIndicator(user.id) : null,
+        ])
+
+        setRewardConfig(config)
+        setIndicatorProfile(ind)
+
+        if (ind?.id) {
+          const refs = await listIndicatorReferrals(ind.id)
+          setReferrals(refs)
+        } else {
+          setReferrals([])
+        }
       } catch (err) {
-        console.warn('Erro ao carregar dados do indicador:', err)
+        console.warn('Erro ao carregar dados do indicador Vitacon:', err)
         setErrorMessage(
-          'Não conseguimos carregar suas informações no momento. Verifique sua conexão e tente novamente.',
+          'Não foi possível carregar os dados. Verifique a conexão e tente novamente.',
         )
       } finally {
         setIsLoading(false)
@@ -288,73 +177,113 @@ export default function IndicadorDashboard() {
     void loadData()
   }, [loadData])
 
-  // Filtragem das indicações
-  const filteredReferrals = useMemo(() => {
-    let list = data.referrals
+  // Métricas calculadas
+  const metrics = useMemo(() => {
+    let fechadas = 0
+    let andamento = 0
+    let totalComissaoRecebida = 0
+    let totalComissaoEstimada = 0
 
-    // Filtro por busca de texto (nome, telefone, tipo)
+    referrals.forEach((r) => {
+      const isFechado =
+        r.estagio === 'fechamento' || r.status === 'closed_won' || r.status === 'closed'
+      const valorCompra = Number(r.valor_compra || r.deal_value || r.expected_value || 0)
+      const comissao =
+        r.comissao_calculada !== undefined &&
+        r.comissao_calculada !== null &&
+        r.comissao_calculada > 0
+          ? Number(r.comissao_calculada)
+          : calculateReward(valorCompra, rewardConfig)
+
+      if (isFechado) {
+        fechadas++
+        totalComissaoRecebida += comissao
+      } else {
+        andamento++
+        totalComissaoEstimada += comissao
+      }
+    })
+
+    return {
+      total: referrals.length,
+      fechadas,
+      andamento,
+      totalComissaoRecebida,
+      totalComissaoEstimada,
+      totalGeral: totalComissaoRecebida + totalComissaoEstimada,
+    }
+  }, [referrals, rewardConfig])
+
+  // Filtragem
+  const filteredReferrals = useMemo(() => {
+    let list = referrals
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
       list = list.filter((r) => {
         const name = (r.client_name || '').toLowerCase()
         const phone = (r.client_phone || '').toLowerCase()
-        const type = (r.property_type || '').toLowerCase()
-        const desc = (r.property_description || '').toLowerCase()
-        return name.includes(q) || phone.includes(q) || type.includes(q) || desc.includes(q)
+        const emp = (r.expand?.empreendimento_id?.nome || '').toLowerCase()
+        const uni = (r.expand?.unidade_escolhida_id?.identificacao || '').toLowerCase()
+        return name.includes(q) || phone.includes(q) || emp.includes(q) || uni.includes(q)
       })
     }
 
-    // Filtro por abas amigáveis
-    if (activeTab === 'pending') {
-      list = list.filter((r) => {
-        const s = (r.status || '').toLowerCase()
-        return s === 'sent'
-      })
-    } else if (activeTab === 'in_progress') {
-      list = list.filter((r) => {
-        const s = (r.status || '').toLowerCase()
-        return s === 'in_analysis' || s === 'in_progress' || s === 'visited' || s === 'negotiating'
-      })
-    } else if (activeTab === 'closed') {
-      list = list.filter((r) => {
-        const s = (r.status || '').toLowerCase()
-        return s === 'closed_won' || s === 'closed'
-      })
-    } else if (activeTab === 'paid') {
-      list = list.filter((r) => {
-        const s = (r.status || '').toLowerCase()
-        return s === 'paid' || s === 'bonus_paid'
-      })
+    if (activeTab === 'andamento') {
+      list = list.filter(
+        (r) => r.estagio !== 'fechamento' && r.status !== 'closed_won' && r.status !== 'closed',
+      )
+    } else if (activeTab === 'fechamento') {
+      list = list.filter(
+        (r) => r.estagio === 'fechamento' || r.status === 'closed_won' || r.status === 'closed',
+      )
     }
 
     return list
-  }, [data.referrals, searchQuery, activeTab])
+  }, [referrals, searchQuery, activeTab])
 
-  // Primeiro nome para saudação
-  const firstName = user?.name ? user.name.split(' ')[0] : 'Indicador'
+  const firstName = user?.name ? user.name.split(' ')[0] : 'Indicador Vitacon'
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* ============================================================== */}
-      {/* 1. TOPO: BANNER BOAS-VINDAS + BOTÃO NOVA INDICAÇÃO */}
-      {/* ============================================================== */}
-      <div className="bg-gradient-to-r from-[#0f2a43] via-[#15466d] to-[#1a5d8f] rounded-2xl p-6 sm:p-8 text-white shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 relative overflow-hidden">
-        {/* Detalhe de fundo suave */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-white/10 to-transparent pointer-events-none" />
-
-        <div className="relative z-10 space-y-2 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs font-semibold text-[#d9995b] border border-white/10">
+    <div className="space-y-6 pb-14">
+      {/* 1. TOPO: SAUDAÇÃO E UNIDADE COMPRADA DO INDICADOR */}
+      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 rounded-2xl p-6 sm:p-8 text-white shadow-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 relative overflow-hidden">
+        <div className="space-y-2 max-w-xl z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 backdrop-blur-sm text-xs font-semibold text-emerald-400 border border-emerald-500/20">
             <Sparkles className="w-3.5 h-3.5" />
-            Portal do Indicador Gabriel
+            Programa de Indicação Vitacon
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Olá, {firstName}!</h1>
-          <p className="text-sm text-gray-200 leading-relaxed">
-            Acompanhe o andamento em tempo real de cada pessoa que você indicou e visualize o valor
-            acumulado das suas bonificações.
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Acompanhe o estágio de cada indicação, as unidades escolhidas e os valores que você
+            receberá por cada fechamento.
           </p>
+
+          {/* Destaque da Unidade Comprada pelo Cliente Indicador */}
+          <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-slate-400 font-medium">Sua Unidade Vitacon Adquirida:</span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>
+                {indicatorProfile?.expand?.empreendimento_id?.nome || 'Vitacon'} •{' '}
+                {indicatorProfile?.expand?.unidade_comprada_id?.identificacao ||
+                  indicatorProfile?.unidade_descricao ||
+                  'Unidade confirmada'}
+              </span>
+            </div>
+            {indicatorProfile?.autorizado ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5" /> Autorizado a indicar
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300">
+                <Clock className="w-3.5 h-3.5" /> Aguardando autorização
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 z-10">
           <Button
             type="button"
             variant="outline"
@@ -369,18 +298,7 @@ export default function IndicadorDashboard() {
 
           <Button
             asChild
-            variant="outline"
-            className="border-white/30 text-white hover:bg-white/10 bg-white/5 h-11 px-4 rounded-xl font-semibold transition-all"
-          >
-            <Link to="/indicador/relatorio" className="flex items-center justify-center gap-2">
-              <FileText className="w-4 h-4 text-[#d9995b]" />
-              <span>Ver Relatório</span>
-            </Link>
-          </Button>
-
-          <Button
-            asChild
-            className="bg-[#d9995b] hover:bg-[#c48548] text-white font-bold px-6 h-11 rounded-xl shadow-md transition-all active:scale-[0.98]"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 h-11 rounded-xl shadow-md transition-all active:scale-[0.98]"
           >
             <Link to="/indicador/nova-indicacao" className="flex items-center justify-center gap-2">
               <PlusCircle className="w-5 h-5" />
@@ -390,227 +308,183 @@ export default function IndicadorDashboard() {
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* 2. CARD DE DESTAQUE: VALOR DE BONIFICAÇÃO ACUMULADO */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Card Principal de Bonificação Acumulada */}
-        <Card className="lg:col-span-2 border-[#e5e0d8] shadow-sm bg-gradient-to-br from-white via-[#faf7f2] to-amber-50/40 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#d9995b]/10 rounded-full blur-2xl pointer-events-none" />
-
+      {/* 2. CARDS RESUMO: RECOMPENSA E STATUS GERAIS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card 1: Comissões e Recompensa */}
+        <Card className="border-slate-200 shadow-sm bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/40 rounded-2xl">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-700 flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600/10 text-emerald-700 flex items-center justify-center">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-base sm:text-lg font-bold text-[#0f2a43]">
-                    Bonificação Acumulada
+                  <CardTitle className="text-base font-bold text-slate-900">
+                    Comissões e Valores
                   </CardTitle>
-                  <CardDescription className="text-xs text-gray-500">
-                    Soma de todas as suas recompensas geradas por indicações
+                  <CardDescription className="text-xs text-slate-500">
+                    Regra vigente:{' '}
+                    <strong>
+                      {rewardConfig.tipo === 'percentual'
+                        ? `${rewardConfig.valor}% sobre a compra`
+                        : formatCurrency(rewardConfig.valor)}
+                    </strong>
                   </CardDescription>
                 </div>
               </div>
-
-              <Badge
-                variant="outline"
-                className="text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200"
-              >
-                Pagamento via PIX
-              </Badge>
             </div>
           </CardHeader>
-
-          <CardContent className="pt-2">
-            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-4 py-2">
-              <div>
-                <span className="text-xs text-gray-500 block font-medium uppercase tracking-wider">
-                  Valor Total Acumulado
-                </span>
-                <div className="text-3xl sm:text-4xl font-extrabold text-emerald-600 tracking-tight mt-1">
-                  {isLoading ? (
-                    <span className="text-gray-300 animate-pulse">R$ ...,..</span>
-                  ) : (
-                    formatCurrency(data.totalBonusAccumulated)
-                  )}
-                </div>
-              </div>
-
-              {/* Subtotais detalhados: Pago vs A Receber */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-6 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-[#e5e0d8] sm:pl-6">
-                <div>
-                  <span className="text-[11px] text-gray-500 block font-medium">Já Recebido</span>
-                  <span className="text-base sm:text-lg font-bold text-[#0f2a43]">
-                    {isLoading ? '...' : formatCurrency(data.totalBonusPaid)}
-                  </span>
-                  <span className="text-[11px] text-emerald-600 flex items-center gap-1 mt-0.5">
-                    <CheckCircle2 className="w-3 h-3" /> Pago via PIX
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-gray-500 block font-medium">A Receber</span>
-                  <span className="text-base sm:text-lg font-bold text-[#1a5d8f]">
-                    {isLoading ? '...' : formatCurrency(data.totalBonusPending)}
-                  </span>
-                  <span className="text-[11px] text-blue-600 flex items-center gap-1 mt-0.5">
-                    <Clock className="w-3 h-3" /> Em liberação
-                  </span>
-                </div>
+          <CardContent className="space-y-3 pt-2">
+            <div>
+              <span className="text-xs text-slate-500 font-medium uppercase tracking-wider block">
+                Total a Receber / Recebido
+              </span>
+              <div className="text-3xl font-extrabold text-emerald-700 mt-0.5">
+                {isLoading ? '...' : formatCurrency(metrics.totalGeral)}
               </div>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-[#e5e0d8]/80 flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span>
-                As bonificações são liberadas automaticamente conforme o contrato do imóvel indicado
-                é assinado e formalizado.
-              </span>
-            </p>
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+              <div>
+                <span className="text-slate-500 block">Fechadas (Garantidas):</span>
+                <span className="font-bold text-emerald-700 text-sm">
+                  {isLoading ? '...' : formatCurrency(metrics.totalComissaoRecebida)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Em andamento (Estimadas):</span>
+                <span className="font-bold text-blue-700 text-sm">
+                  {isLoading ? '...' : formatCurrency(metrics.totalComissaoEstimada)}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Card Resumo de Indicações Realizadas */}
-        <Card className="border-[#e5e0d8] shadow-sm bg-white flex flex-col justify-between">
+        {/* Card 2: Contatos Indicados */}
+        <Card className="border-slate-200 shadow-sm bg-white rounded-2xl flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-[#1a5d8f]/10 text-[#1a5d8f] flex items-center justify-center">
-                <Send className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
+                <Send className="w-5 h-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-bold text-[#0f2a43]">
-                  Minhas Oportunidades
+                <CardTitle className="text-base font-bold text-slate-900">
+                  Indicações Realizadas
                 </CardTitle>
-                <CardDescription className="text-xs text-gray-500">
-                  Total de contatos enviados
+                <CardDescription className="text-xs text-slate-500">
+                  Total de compradores indicados
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-
-          <CardContent className="space-y-4 pt-1">
+          <CardContent className="space-y-3 pt-2">
             <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-[#0f2a43]">
-                {isLoading ? '...' : data.totalReferrals}
+              <span className="text-3xl font-extrabold text-slate-900">
+                {isLoading ? '...' : metrics.total}
               </span>
-              <span className="text-xs text-gray-500 font-medium">
-                {data.totalReferrals === 1 ? 'indicação feita' : 'indicações feitas'}
-              </span>
+              <span className="text-xs text-slate-500 font-medium">amigos indicados</span>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-[#e5e0d8] text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#1a5d8f]" />
-                  Em andamento / análise:
-                </span>
-                <span className="font-bold text-[#0f2a43]">
-                  {isLoading ? '...' : data.inProgressCount}
-                </span>
+            <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Em andamento / negociação:</span>
+                <strong className="text-blue-700">{metrics.andamento}</strong>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Concluídas com sucesso:
-                </span>
-                <span className="font-bold text-[#0f2a43]">
-                  {isLoading ? '...' : data.closedCount}
-                </span>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Compras fechadas:</span>
+                <strong className="text-emerald-700">{metrics.fechadas}</strong>
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="w-full border-[#1a5d8f] text-[#1a5d8f] hover:bg-[#1a5d8f]/5 rounded-xl font-semibold mt-2"
-            >
-              <Link
-                to="/indicador/nova-indicacao"
-                className="flex items-center justify-center gap-1.5"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Fazer nova indicação
-              </Link>
-            </Button>
+        {/* Card 3: Como funciona a Remuneração */}
+        <Card className="border-slate-200 shadow-sm bg-slate-50/70 rounded-2xl">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                <DollarSign className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900">
+                  Transparência de Recompensa
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Definida pelo painel administrativo
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="text-xs text-slate-600 space-y-2 pt-2">
+            <p>
+              • Sua comissão é aplicada sobre o <strong>valor da compra da unidade Vitacon</strong>{' '}
+              escolhida pelo seu indicado.
+            </p>
+            <p>
+              • Você acompanha cada passo do cliente desde o primeiro contato até a assinatura
+              formal da proposta.
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* ============================================================== */}
-      {/* 3. HISTÓRICO DAS INDICAÇÕES */}
-      {/* ============================================================== */}
-      <Card className="border-[#e5e0d8] shadow-sm bg-white overflow-hidden">
-        <CardHeader className="border-b border-[#e5e0d8] pb-4 bg-gradient-to-b from-[#faf7f2]/50 to-white">
+      {/* 3. LISTA E DETALHE DE CADA INDICAÇÃO COM LINHA DO TEMPO DOS 6 ESTÁGIOS */}
+      <Card className="border-slate-200 shadow-sm bg-white overflow-hidden rounded-2xl">
+        <CardHeader className="border-b border-slate-100 pb-4 bg-gradient-to-b from-slate-50 to-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <CardTitle className="text-lg font-bold text-[#0f2a43] flex items-center gap-2">
-                <span>Histórico de Indicações</span>
-                {!isLoading && (
-                  <Badge
-                    variant="secondary"
-                    className="bg-[#e5e0d8]/50 text-gray-700 font-semibold text-xs"
-                  >
-                    {data.referrals.length}
-                  </Badge>
-                )}
+              <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span>Controle das Minhas Indicações</span>
+                <Badge
+                  variant="secondary"
+                  className="bg-slate-200/80 text-slate-800 text-xs font-bold"
+                >
+                  {referrals.length}
+                </Badge>
               </CardTitle>
-              <CardDescription className="text-xs text-gray-500 mt-0.5">
-                Acompanhe o status atual e o prazo de primeiro contato de cada cliente indicado.
+              <CardDescription className="text-xs text-slate-500 mt-0.5">
+                Linha do tempo dos estágios (Reunião → Gostou → Pensar → Proposta → Fechamento),
+                unidade escolhida e comissão.
               </CardDescription>
             </div>
 
-            {/* Barra de pesquisa simples */}
             <div className="w-full sm:w-64 relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
                 type="text"
-                placeholder="Buscar pelo nome ou contato..."
+                placeholder="Buscar cliente, empreendimento..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs rounded-xl border-[#e5e0d8] focus-visible:ring-[#1a5d8f]"
+                className="pl-9 h-9 text-xs rounded-xl border-slate-200 focus-visible:ring-emerald-600"
               />
             </div>
           </div>
 
-          {/* Abas de filtro amigáveis */}
           <div className="pt-3">
             <Tabs
               value={activeTab}
               onValueChange={(val) => setActiveTab(val as typeof activeTab)}
               className="w-full"
             >
-              <TabsList className="bg-[#faf7f2] border border-[#e5e0d8] p-0.5 h-9 rounded-xl flex flex-wrap max-w-full overflow-x-auto justify-start">
+              <TabsList className="bg-slate-100 border border-slate-200 p-0.5 h-9 rounded-xl flex">
                 <TabsTrigger
                   value="all"
-                  className="text-xs rounded-lg data-[state=active]:bg-[#1a5d8f] data-[state=active]:text-white data-[state=active]:shadow-xs px-3 py-1"
+                  className="text-xs rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-semibold"
                 >
-                  Todas ({data.referrals.length})
+                  Todas ({referrals.length})
                 </TabsTrigger>
                 <TabsTrigger
-                  value="pending"
-                  className="text-xs rounded-lg data-[state=active]:bg-[#1a5d8f] data-[state=active]:text-white data-[state=active]:shadow-xs px-3 py-1"
+                  value="andamento"
+                  className="text-xs rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-semibold"
                 >
-                  Aguardando análise
+                  Em Andamento ({metrics.andamento})
                 </TabsTrigger>
                 <TabsTrigger
-                  value="in_progress"
-                  className="text-xs rounded-lg data-[state=active]:bg-[#1a5d8f] data-[state=active]:text-white data-[state=active]:shadow-xs px-3 py-1"
+                  value="fechamento"
+                  className="text-xs rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-semibold"
                 >
-                  Em andamento
-                </TabsTrigger>
-                <TabsTrigger
-                  value="closed"
-                  className="text-xs rounded-lg data-[state=active]:bg-[#1a5d8f] data-[state=active]:text-white data-[state=active]:shadow-xs px-3 py-1"
-                >
-                  Concluídas
-                </TabsTrigger>
-                <TabsTrigger
-                  value="paid"
-                  className="text-xs rounded-lg data-[state=active]:bg-[#1a5d8f] data-[state=active]:text-white data-[state=active]:shadow-xs px-3 py-1"
-                >
-                  Bonificação paga
+                  Fechadas ({metrics.fechadas})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -618,76 +492,55 @@ export default function IndicadorDashboard() {
         </CardHeader>
 
         <CardContent className="p-0">
-          {/* Estado de Erro Amigável */}
           {errorMessage && (
             <div className="p-6 text-center max-w-md mx-auto space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h4 className="text-base font-bold text-[#0f2a43]">
-                Não foi possível carregar suas indicações
-              </h4>
-              <p className="text-xs text-gray-600 leading-relaxed">{errorMessage}</p>
+              <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+              <p className="text-xs text-slate-600">{errorMessage}</p>
               <Button
                 type="button"
                 onClick={() => void loadData(true)}
-                className="bg-[#1a5d8f] hover:bg-[#144a72] text-white text-xs h-9 px-4 rounded-xl"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-4 rounded-xl"
               >
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                 Tentar novamente
               </Button>
             </div>
           )}
 
-          {/* Estado de Carregamento com Skeleton e Spinner */}
           {isLoading && !errorMessage && (
-            <div className="py-16 text-center space-y-4 px-4">
-              <div className="w-10 h-10 border-3 border-[#1a5d8f] border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-sm text-gray-500">Carregando suas indicações...</p>
-              <div className="max-w-2xl mx-auto space-y-3 pt-2">
-                <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-                <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-              </div>
+            <div className="py-16 text-center space-y-4">
+              <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-slate-500">Carregando suas indicações Vitacon...</p>
             </div>
           )}
 
-          {/* Estado Vazio Amigável: Sem nenhuma indicação criada ainda */}
-          {!isLoading && !errorMessage && data.referrals.length === 0 && (
+          {!isLoading && !errorMessage && referrals.length === 0 && (
             <div className="py-16 px-4 text-center max-w-md mx-auto space-y-4">
-              <div className="w-16 h-16 rounded-3xl bg-[#faf7f2] border-2 border-[#e5e0d8] flex items-center justify-center mx-auto text-[#1a5d8f] shadow-xs">
-                <Sparkles className="w-8 h-8 text-[#d9995b]" />
+              <div className="w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-700">
+                <Sparkles className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-[#0f2a43]">Ainda não tens indicações</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">
-                  Ganhe recompensas indicando compradores, inquilinos ou proprietários que queiram
-                  vender ou alugar imóveis.
+                <h3 className="text-lg font-bold text-slate-900">Nenhuma indicação cadastrada</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  Você está autorizado a indicar compradores para a Vitacon. Cadastre sua primeira
+                  indicação e acompanhe todas as etapas.
                 </p>
               </div>
-              <div className="pt-2">
-                <Button
-                  asChild
-                  className="bg-[#1a5d8f] hover:bg-[#154a73] text-white font-bold px-6 h-11 rounded-xl shadow"
-                >
-                  <Link to="/indicador/nova-indicacao" className="flex items-center gap-2">
-                    <PlusCircle className="w-4 h-4" />
-                    Fazer Minha Primeira Indicação
-                  </Link>
-                </Button>
-              </div>
+              <Button
+                asChild
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 h-11 rounded-xl shadow"
+              >
+                <Link to="/indicador/nova-indicacao" className="flex items-center gap-2">
+                  <PlusCircle className="w-4 h-4" />
+                  Cadastrar Primeira Indicação
+                </Link>
+              </Button>
             </div>
           )}
 
-          {/* Estado Vazio de Filtro ou Pesquisa */}
-          {!isLoading && data.referrals.length > 0 && filteredReferrals.length === 0 && (
-            <div className="py-12 px-4 text-center max-w-md mx-auto space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto text-gray-400">
-                <Search className="w-6 h-6" />
-              </div>
-              <h4 className="text-base font-bold text-[#0f2a43]">Nenhuma indicação encontrada</h4>
-              <p className="text-xs text-gray-500">
-                Não localizamos indicações com o filtro ou busca selecionada. Tente limpar os
-                filtros.
+          {!isLoading && referrals.length > 0 && filteredReferrals.length === 0 && (
+            <div className="py-12 px-4 text-center max-w-md mx-auto space-y-2">
+              <p className="text-sm font-semibold text-slate-700">
+                Nenhum resultado para os filtros atuais.
               </p>
               <Button
                 variant="outline"
@@ -696,122 +549,181 @@ export default function IndicadorDashboard() {
                   setSearchQuery('')
                   setActiveTab('all')
                 }}
-                className="border-[#e5e0d8] text-gray-700 rounded-xl"
               >
                 Limpar filtros
               </Button>
             </div>
           )}
 
-          {/* Listagem das Indicações */}
           {!isLoading && filteredReferrals.length > 0 && (
-            <div className="divide-y divide-[#e5e0d8]">
-              {filteredReferrals.map((referral) => {
-                const statusCfg = getStatusConfig(referral.status)
-                const typeInfo = getPropertyTypeLabel(referral.property_type)
-                const slaInfo = formatSlaNotice(referral.sla_deadline, referral.status)
-                const StatusIcon = statusCfg.icon
-                const TypeIcon = typeInfo.icon
+            <div className="divide-y divide-slate-100">
+              {filteredReferrals.map((r) => {
+                const estagioAtual = getEstagioMeta(r.estagio)
+                const valorCompra = Number(
+                  r.valor_compra ||
+                    r.deal_value ||
+                    r.expected_value ||
+                    r.expand?.unidade_escolhida_id?.valor ||
+                    0,
+                )
+                const comissao =
+                  r.comissao_calculada !== undefined &&
+                  r.comissao_calculada !== null &&
+                  r.comissao_calculada > 0
+                    ? Number(r.comissao_calculada)
+                    : calculateReward(valorCompra, rewardConfig)
 
-                // Busca se há bônus vinculado a esta indicação
-                const linkedBonus = data.bonuses.find((b) => b.referral_id === referral.id)
+                const isFechado =
+                  r.estagio === 'fechamento' || r.status === 'closed_won' || r.status === 'closed'
+
+                const empreendimentoNome =
+                  r.expand?.empreendimento_id?.nome || 'Empreendimento em definição'
+                const unidadeIdent =
+                  r.expand?.unidade_escolhida_id?.identificacao ||
+                  (r.expand?.empreendimento_id ? 'Unidade em escolha' : 'A definir na visita')
 
                 return (
                   <div
-                    key={referral.id}
-                    className="p-4 sm:p-5 hover:bg-[#faf7f2]/60 transition-colors flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    key={r.id}
+                    className="p-5 sm:p-6 hover:bg-slate-50/80 transition-colors space-y-4"
                   >
-                    {/* Lado Esquerdo: Dados Principais do Cliente e Tipo */}
-                    <div className="space-y-2 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-base sm:text-lg text-[#0f2a43] truncate">
-                          {referral.client_name}
-                        </span>
-
-                        {/* Badge de Tipo de Imóvel */}
-                        <Badge
-                          variant="outline"
-                          className="bg-white text-gray-700 border-[#e5e0d8] text-xs font-medium inline-flex items-center gap-1 shrink-0"
-                        >
-                          <TypeIcon className="w-3 h-3 text-[#1a5d8f]" />
-                          <span>{typeInfo.label}</span>
-                        </Badge>
-
-                        {/* Badge do Status em Rótulo Leigo */}
-                        <Badge
-                          className={`${statusCfg.badgeClass} text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shrink-0 border`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotClass}`} />
-                          <StatusIcon className="w-3 h-3" />
-                          <span>{statusCfg.label}</span>
-                        </Badge>
-                      </div>
-
-                      {/* Informações complementares: Contato, Data e Descrição */}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                        {referral.client_phone && (
-                          <span className="inline-flex items-center gap-1 text-gray-700 font-medium">
-                            <Phone className="w-3 h-3 text-gray-400" />
-                            {formatPhone(referral.client_phone)}
+                    {/* Linha 1: Nome do Indicado, Status e Comissão */}
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-extrabold text-base sm:text-lg text-slate-900">
+                            {r.client_name}
                           </span>
-                        )}
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${estagioAtual.badgeColor}`}
+                          >
+                            Estágio: {estagioAtual.label}
+                          </span>
+                        </div>
 
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-gray-400" />
-                          Enviado em {formatDateTime(referral.created)}
-                        </span>
+                        {/* Contato do indicado */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                          {r.client_phone && (
+                            <span className="flex items-center gap-1 font-medium text-slate-700">
+                              <Phone className="w-3.5 h-3.5 text-slate-400" />
+                              {formatPhone(r.client_phone)}
+                            </span>
+                          )}
+                          {r.client_email && (
+                            <span className="flex items-center gap-1">
+                              <Mail className="w-3.5 h-3.5 text-slate-400" />
+                              {r.client_email}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            Cadastrado em {formatDateTime(r.created)}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Descrição resumida da indicação (se houver) */}
-                      {referral.property_description && (
-                        <p className="text-xs text-gray-600 line-clamp-2 italic pt-0.5 max-w-2xl">
-                          "{referral.property_description}"
-                        </p>
-                      )}
-
-                      {/* Aviso de Prazo de Contato (SLA 3 horas) em linguagem simples */}
-                      {slaInfo && (
-                        <div className="pt-1">
-                          <div
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                              slaInfo.isPast
-                                ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                                : 'bg-blue-50 text-[#1a5d8f] border border-blue-200'
-                            }`}
-                          >
-                            <Clock className="w-3.5 h-3.5 shrink-0" />
-                            <span>{slaInfo.text}</span>
-                          </div>
+                      {/* Caixa de Comissão para o Indicador */}
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200/80 text-right shrink-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                          {isFechado ? 'Sua Comissão Fechada' : 'Comissão Estimada'}
+                        </span>
+                        <div className="text-lg sm:text-xl font-black text-emerald-800">
+                          {formatCurrency(comissao)}
                         </div>
-                      )}
+                        <span className="text-[10px] text-emerald-700 block">
+                          {r.comissao_regra_aplicada ||
+                            (rewardConfig.tipo === 'percentual'
+                              ? `${rewardConfig.valor}% sobre o valor`
+                              : 'Valor fixo configurado')}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Lado Direito: Bônus desta indicação ou status explicativo */}
-                    <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 pt-3 md:pt-0 border-[#e5e0d8] shrink-0">
-                      {linkedBonus ? (
-                        <div className="text-right">
-                          <span className="text-[11px] text-gray-500 block uppercase font-medium">
-                            Bonificação
+                    {/* Linha 2: Empreendimento e Unidade Escolhidos */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                            Empreendimento Escolhido
                           </span>
-                          <span className="text-base sm:text-lg font-bold text-emerald-600">
-                            {formatCurrency(linkedBonus.amount)}
+                          <span className="font-semibold text-slate-800">{empreendimentoNome}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Home className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                            Unidade Escolhida / Comprada
                           </span>
-                          <span className="text-[10px] text-gray-500 block">
-                            {linkedBonus.status === 'paid'
-                              ? 'Valor pago no PIX'
-                              : linkedBonus.status === 'approved'
-                                ? 'Aprovado para pagamento'
-                                : 'Em processamento'}
+                          <span className="font-semibold text-slate-800">
+                            {unidadeIdent}
+                            {valorCompra > 0 ? ` • ${formatCurrency(valorCompra)}` : ''}
                           </span>
                         </div>
-                      ) : (
-                        <div className="text-left md:text-right">
-                          <span className="text-[11px] text-gray-400 block font-medium">
-                            Status do atendimento
-                          </span>
-                          <span className="text-xs text-gray-600">{statusCfg.description}</span>
-                        </div>
-                      )}
+                      </div>
+                    </div>
+
+                    {/* Linha 3: LINHA DO TEMPO DOS 6 ESTÁGIOS DA NEGOCIAÇÃO */}
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Evolução da Negociação com a Vitacon
+                        </span>
+                        <span className="text-xs text-slate-600 font-medium">
+                          Etapa {estagioAtual.step} de 6: <strong>{estagioAtual.label}</strong>
+                        </span>
+                      </div>
+
+                      {/* Timeline em Steps */}
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                        {ESTAGIOS_VITACON.map((stepMeta) => {
+                          const isCompleted = estagioAtual.step > stepMeta.step
+                          const isCurrent = estagioAtual.step === stepMeta.step
+
+                          return (
+                            <div
+                              key={stepMeta.key}
+                              className={`p-2 rounded-xl border text-center transition-all ${
+                                isCompleted
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                                  : isCurrent
+                                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm ring-2 ring-emerald-200'
+                                    : 'bg-white border-slate-200 text-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-center mb-1">
+                                {isCompleted ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />
+                                ) : (
+                                  <span
+                                    className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${
+                                      isCurrent
+                                        ? 'bg-white text-emerald-700'
+                                        : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                  >
+                                    {stepMeta.step}
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className={`text-[11px] font-bold truncate ${
+                                  isCurrent ? 'text-white' : ''
+                                }`}
+                                title={stepMeta.label}
+                              >
+                                {stepMeta.label}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-2 italic">
+                        * O estágio da negociação é atualizado pela equipe comercial e
+                        administrativa da Vitacon conforme o cliente avança.
+                      </p>
                     </div>
                   </div>
                 )
@@ -820,44 +732,6 @@ export default function IndicadorDashboard() {
           )}
         </CardContent>
       </Card>
-
-      {/* ============================================================== */}
-      {/* 4. GUIA SIMPLES: COMO FUNCIONA O PROGRAMA INDICA GABRIEL */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-        <div className="p-4 rounded-2xl bg-white border border-[#e5e0d8] shadow-2xs space-y-1.5">
-          <div className="w-7 h-7 rounded-lg bg-[#1a5d8f]/10 text-[#1a5d8f] flex items-center justify-center font-bold text-xs mb-1">
-            1
-          </div>
-          <h4 className="text-sm font-bold text-[#0f2a43]">Indicação Fácil</h4>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Grave um áudio de poucos segundos ou informe o nome e WhatsApp do cliente que quer
-            comprar, alugar ou vender.
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-[#e5e0d8] shadow-2xs space-y-1.5">
-          <div className="w-7 h-7 rounded-lg bg-[#d9995b]/10 text-[#c48548] flex items-center justify-center font-bold text-xs mb-1">
-            2
-          </div>
-          <h4 className="text-sm font-bold text-[#0f2a43]">Atendimento Ágil</h4>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Nossos corretores entram em contato com seu indicado em até 3 horas com foco total e
-            atendimento personalizado.
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-[#e5e0d8] shadow-2xs space-y-1.5">
-          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center font-bold text-xs mb-1">
-            3
-          </div>
-          <h4 className="text-sm font-bold text-[#0f2a43]">PIX na sua Conta</h4>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            A cada negócio concluído, sua bonificação é depositada diretamente na sua chave PIX
-            cadastrada.
-          </p>
-        </div>
-      </div>
     </div>
   )
 }

@@ -45,10 +45,10 @@ export default function ForgotPassword() {
             to="/"
             className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md text-white border border-white/20 mb-4 hover:bg-white/15 transition-colors"
           >
-            <div className="w-7 h-7 rounded-lg bg-[#1a5d8f] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
               <Home className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold tracking-tight">Indica Gabriel</span>
+            <span className="font-bold tracking-tight">Programa Vitacon</span>
           </Link>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Recuperação de Senha
@@ -89,7 +89,7 @@ export default function ForgotPassword() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <p className="text-sm text-gray-600 leading-relaxed">
-                Digite o e-mail associado à sua conta do <strong>Indica Gabriel</strong> e
+                Digite o e-mail associado à sua conta do <strong>Programa Vitacon</strong> e
                 enviaremos um link para criar uma nova senha.
               </p>
 

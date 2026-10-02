@@ -19,9 +19,8 @@ import {
   Wallet,
   FileText,
 } from 'lucide-react'
-import GabrielLogo, { GabrielOfficialLogoImg } from '@/components/GabrielLogo'
+import VitaconLogo from '@/components/VitaconLogo'
 import InstallPwaPrompt from '@/components/InstallPwaPrompt'
-import WhatsAppShareButton from '@/components/WhatsAppShareButton'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -172,22 +171,13 @@ export default function Layout() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            {/* Logo Marca Oficial da Imobiliária Gabriel: canto superior esquerdo só a bola G no mobile e desktop */}
+            {/* Logo Marca Vitacon: canto superior esquerdo no mobile e desktop */}
             <Link
               to={user ? (isStaff ? '/admin' : '/indicador') : '/'}
-              className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-[#14522a] rounded-2xl p-1.5 transition-transform hover:scale-[1.03]"
-              title="Indica Gabriel — Imobiliária Gabriel"
+              className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-emerald-600 rounded-2xl p-1.5 transition-transform hover:scale-[1.03]"
+              title="Programa de Indicação Vitacon"
             >
-              {/* Canto superior esquerdo: a bola G oficial isolada */}
-              <GabrielLogo variant="symbol" size={44} />
-              <div className="flex flex-col leading-tight">
-                <span className="font-extrabold text-base sm:text-lg text-[#0f2a43] tracking-tight group-hover:text-[#1a5d8f] transition-colors">
-                  Indica Gabriel
-                </span>
-                <span className="text-[10px] text-gray-500 font-semibold tracking-wider uppercase">
-                  Imobiliária Gabriel
-                </span>
-              </div>
+              <VitaconLogo size="md" />
             </Link>
 
             {/* Navegação Desktop Central */}
@@ -211,14 +201,10 @@ export default function Layout() {
                     Como Funciona
                   </a>
                   <Link
-                    to="/cadastro"
-                    className={`text-sm font-semibold transition-colors ${
-                      location.pathname === '/cadastro'
-                        ? 'text-[#1a5d8f]'
-                        : 'text-[#1f2933] hover:text-[#1a5d8f]'
-                    }`}
+                    to="/login"
+                    className="text-sm font-semibold text-[#1f2933] hover:text-emerald-700 transition-colors"
                   >
-                    Seja um Indicador
+                    Área do Indicador
                   </Link>
                 </>
               ) : (
@@ -510,10 +496,10 @@ export default function Layout() {
                     Entrar
                   </Button>
                   <Button
-                    onClick={() => navigate('/cadastro')}
-                    className="bg-[#1a5d8f] hover:bg-[#144a72] text-white font-semibold rounded-lg px-5 h-10 shadow-sm hover:shadow transition-all duration-150 hover:scale-[1.02]"
+                    onClick={() => navigate('/login')}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 h-10 shadow-sm hover:shadow transition-all duration-150 hover:scale-[1.02]"
                   >
-                    Quero Indicar
+                    Acessar Painel
                   </Button>
                 </div>
               )}
@@ -552,16 +538,10 @@ export default function Layout() {
             }`}
           >
             <div className="overflow-y-auto">
-              {/* Header do Drawer com Bola G da Gabriel */}
+              {/* Header do Drawer com Logo Vitacon */}
               <div className="flex items-center justify-between pb-5 border-b border-[#e5e0d8]">
                 <div className="flex items-center gap-2.5">
-                  <GabrielLogo variant="symbol" size={40} />
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-base text-[#0f2a43]">Indica Gabriel</span>
-                    <span className="text-[10px] text-gray-500 font-medium">
-                      Imobiliária Gabriel
-                    </span>
-                  </div>
+                  <VitaconLogo size="sm" />
                 </div>
                 <button
                   type="button"
@@ -770,11 +750,11 @@ export default function Layout() {
                   <Button
                     onClick={() => {
                       setMobileMenuOpen(false)
-                      navigate('/cadastro')
+                      navigate('/login')
                     }}
-                    className="w-full bg-[#1a5d8f] hover:bg-[#144a72] text-white font-semibold h-11 shadow-sm"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 shadow-sm"
                   >
-                    Quero Indicar
+                    Acessar Minha Conta
                   </Button>
                 </div>
               )}
@@ -881,20 +861,15 @@ export default function Layout() {
                   </div>
                 )}
 
-                {/* Banner de Suporte Imobiliária Gabriel com Logo G */}
-                <div className="p-3.5 rounded-xl bg-[#faf7f2] border border-[#e5e0d8] space-y-2">
+                {/* Banner Vitacon */}
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
                   <div className="flex items-center gap-2">
-                    <GabrielLogo variant="symbol" size={24} />
-                    <span className="text-xs font-bold text-[#0f2a43]">Imobiliária Gabriel</span>
+                    <VitaconLogo size="sm" showTagline={false} />
                   </div>
-                  <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Dúvidas sobre bonificação ou repasse? Fale com seu gerente de equipe.
+                  <p className="text-[11px] text-emerald-900 leading-relaxed">
+                    Exclusivo para clientes que adquiriram unidades Vitacon. Acompanhe suas
+                    indicações e comissões.
                   </p>
-                  <WhatsAppShareButton
-                    variant="compact"
-                    label="Convidar amigo"
-                    className="w-full justify-center"
-                  />
                 </div>
               </div>
             </aside>
@@ -912,141 +887,81 @@ export default function Layout() {
         )}
       </div>
 
-      {/* RODAPÉ OFICIAL DA IMOBILIÁRIA GABRIEL COM COMPOSIÇÃO COMPLETA CLÁSSICA */}
-      <footer className="bg-[#0b1d2e] text-white pt-16 pb-12 border-t border-[#14522a]/40 mt-auto">
+      {/* RODAPÉ OFICIAL PROGRAMA DE INDICAÇÃO VITACON */}
+      <footer className="bg-slate-950 text-white pt-14 pb-10 border-t border-slate-800 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 pb-12 border-b border-white/10">
-            {/* Coluna 1: Marca com Logo Gabriel Clássico */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 pb-10 border-b border-white/10">
+            {/* Coluna 1: Marca Vitacon */}
             <div className="flex flex-col space-y-4">
-              {/* Logo Completo Oficial no Rodapé (img2018 com G + Gabriel + Inovações + CRECI) */}
-              <div>
-                <GabrielLogo
-                  variant="full"
-                  size={54}
-                  inverted
-                  alt="Logo Oficial Gabriel Inovações Imobiliárias"
-                />
-              </div>
-
-              <p className="text-sm text-gray-300 leading-relaxed max-w-sm">
-                Conectando você às melhores oportunidades do mercado imobiliário em Jaú,
-                Pederneiras, Lençóis Paulista e região. Indique clientes, acompanhe negócios e
-                conquiste recompensas com total transparência.
+              <VitaconLogo variant="dark" size="lg" />
+              <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
+                Programa exclusivo de indicação para clientes com unidades adquiridas na Vitacon.
+                Indique compradores e receba remuneração por cada fechamento concluído.
               </p>
-
-              {/* Botão de Compartilhar no Rodapé */}
-              <div className="pt-1">
-                <WhatsAppShareButton
-                  variant="compact"
-                  label="Compartilhar no WhatsApp"
-                  className="bg-white/10 text-emerald-300 border-white/20 hover:bg-white/20"
-                />
-              </div>
-
               <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Imobiliária Gabriel • CRECI 29.083-J</span>
+                <span>Vitacon Participações • Smart Living SP</span>
               </div>
             </div>
-            {/* Coluna 2: Links Rápidos */}
+
+            {/* Coluna 2: Acesso Rápido */}
             <div className="flex flex-col space-y-3">
-              <h3 className="text-base font-semibold text-white tracking-wide">Navegação Rápida</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
+              <h3 className="text-base font-semibold text-white tracking-wide">Acesso</h3>
+              <ul className="space-y-2 text-sm text-slate-400">
                 <li>
-                  <Link to="/" className="hover:text-[#d9995b] transition-colors">
+                  <Link to="/" className="hover:text-emerald-400 transition-colors">
                     Início
                   </Link>
-                </li>
-                <li>
-                  <a href="/#como-funciona" className="hover:text-[#d9995b] transition-colors">
-                    Como Funciona a Indicação
-                  </a>
                 </li>
                 {user ? (
                   <>
                     {isIndicador && (
                       <li>
-                        <Link to="/indicador" className="hover:text-[#d9995b] transition-colors">
+                        <Link to="/indicador" className="hover:text-emerald-400 transition-colors">
                           Portal do Indicador
                         </Link>
                       </li>
                     )}
                     {isStaff && (
                       <li>
-                        <Link to="/admin" className="hover:text-[#d9995b] transition-colors">
-                          Painel Administrativo
+                        <Link to="/admin" className="hover:text-emerald-400 transition-colors">
+                          Painel Master Admin
                         </Link>
                       </li>
                     )}
                   </>
                 ) : (
-                  <>
-                    <li>
-                      <Link
-                        to="/cadastro"
-                        className="hover:text-[#d9995b] transition-colors font-semibold"
-                      >
-                        Cadastre-se como Indicador
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/auth?mode=signup"
-                        className="hover:text-[#d9995b] transition-colors"
-                      >
-                        Criar Conta Direta
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="/login" className="hover:text-[#d9995b] transition-colors">
-                        Acessar Plataforma (Entrar)
-                      </Link>
-                    </li>
-                  </>
+                  <li>
+                    <Link to="/login" className="hover:text-emerald-400 transition-colors">
+                      Entrar no Sistema
+                    </Link>
+                  </li>
                 )}
               </ul>
             </div>
-            {/* Coluna 3: Redes Sociais e Contato + Logo Oficial */}
+
+            {/* Coluna 3: Regras e Transparência */}
             <div className="flex flex-col space-y-3">
               <h3 className="text-base font-semibold text-white tracking-wide">
-                Imobiliária Gabriel
+                Regras do Programa
               </h3>
-              <p className="text-sm text-gray-300 leading-relaxed">
-                Atendimento consultivo, confiança e tradição na compra, venda e locação de imóveis
-                há mais de 40 anos.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                • Válido exclusivamente para clientes com unidade comprada e autorização ativa pela
+                administração.
               </p>
-
-              {/* Logo oficial da Gabriel com fundo branco sutil clássico */}
-              <div className="pt-2">
-                <GabrielOfficialLogoImg
-                  inverted
-                  maxHeight={56}
-                  className="shadow-sm border border-white/20"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <a
-                  href="https://www.imobiliariagabriel.com.br"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-emerald-400 hover:underline font-semibold"
-                >
-                  www.imobiliariagabriel.com.br
-                </a>
-              </div>
-            </div>{' '}
+              <p className="text-xs text-slate-400 leading-relaxed">
+                • O indicador acompanha em tempo real cada etapa: reunião, proposta, unidade
+                escolhida e fechamento.
+              </p>
+            </div>
           </div>
 
-          {/* Linha Inferior */}
-          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-4">
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
             <p>
-              © 2025 Indica Gabriel — Imobiliária Gabriel • CRECI 29.083-J. Todos os direitos
+              © {new Date().getFullYear()} Programa de Indicação Vitacon. Todos os direitos
               reservados.
             </p>
-            <p className="flex items-center gap-1">
-              Plataforma PWA Oficial • Instale na tela de início
-            </p>
+            <p>Plataforma Web Responsiva</p>
           </div>
         </div>
       </footer>

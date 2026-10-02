@@ -70,6 +70,7 @@ export async function listIndicatorReferrals(indicatorId?: string): Promise<Refe
     const records = await pb.collection('referrals').getFullList<ReferralRecord>({
       filter: filter || undefined,
       sort: '-created',
+      expand: 'empreendimento_id,unidade_escolhida_id,indicator_id',
     })
     return records
   } catch (err) {
@@ -196,6 +197,12 @@ export interface ReferralRecord extends RecordModel {
   expected_value?: number
   deal_value?: number
   status: ReferralStatus
+  estagio?: string
+  empreendimento_id?: string
+  unidade_escolhida_id?: string
+  valor_compra?: number
+  comissao_calculada?: number
+  comissao_regra_aplicada?: string
   assigned_to?: string
   assigned_team_id?: string
   assigned_manager_id?: string
@@ -217,6 +224,26 @@ export interface ReferralRecord extends RecordModel {
       email?: string
       pix_key?: string
       pix_key_type?: string
+      empreendimento_id?: string
+      unidade_comprada_id?: string
+      unidade_descricao?: string
+      expand?: {
+        empreendimento_id?: { id: string; nome: string }
+        unidade_comprada_id?: { id: string; identificacao: string }
+      }
+    }
+    empreendimento_id?: {
+      id: string
+      nome: string
+      bairro?: string
+      cidade?: string
+    }
+    unidade_escolhida_id?: {
+      id: string
+      identificacao: string
+      torre?: string
+      metragem?: number
+      valor?: number
     }
     assigned_team_id?: {
       id: string
@@ -389,7 +416,8 @@ export async function listAllReferrals(options?: {
       .getList<ReferralRecord>(options?.page || 1, options?.perPage || 200, {
         filter: options?.filter,
         sort: options?.sort || '-created',
-        expand: 'indicator_id,assigned_team_id,assigned_manager_id,assigned_by',
+        expand:
+          'indicator_id,empreendimento_id,unidade_escolhida_id,assigned_team_id,assigned_manager_id,assigned_by',
       })
     return {
       items: res.items,
@@ -407,7 +435,8 @@ export async function listAllReferrals(options?: {
 export async function getReferralById(id: string): Promise<ReferralRecord | null> {
   try {
     const rec = await pb.collection('referrals').getOne<ReferralRecord>(id, {
-      expand: 'indicator_id,assigned_team_id,assigned_manager_id,assigned_by',
+      expand:
+        'indicator_id,empreendimento_id,unidade_escolhida_id,assigned_team_id,assigned_manager_id,assigned_by',
     })
     return rec
   } catch (err) {
@@ -551,6 +580,69 @@ export interface UpdateReferralStatusResponse {
 /**
  * Chama o endpoint backend para atualizar status da indicação (update-referral-status)
  */
+export interface UpdateVitaconReferralPayload {
+  referral_id: string
+  estagio?: string
+  status?: string
+  empreendimento_id?: string
+  unidade_escolhida_id?: string
+  valor_compra?: number
+  comissao_calculada?: number
+  comissao_regra_aplicada?: string
+  notes?: string
+}
+
+export async function updateVitaconReferral(
+  payload: UpdateVitaconReferralPayload,
+): Promise<{ success: boolean; data?: ReferralRecord; error?: string }> {
+  try {
+    const updateData: Record<string, unknown> = {}
+    if (payload.estagio !== undefined) updateData.estagio = payload.estagio
+    if (payload.status !== undefined) updateData.status = payload.status
+    if (payload.empreendimento_id !== undefined)
+      updateData.empreendimento_id = payload.empreendimento_id
+    if (payload.unidade_escolhida_id !== undefined)
+      updateData.unidade_escolhida_id = payload.unidade_escolhida_id
+    if (payload.valor_compra !== undefined) updateData.valor_compra = payload.valor_compra
+    if (payload.comissao_calculada !== undefined)
+      updateData.comissao_calculada = payload.comissao_calculada
+    if (payload.comissao_regra_aplicada !== undefined)
+      updateData.comissao_regra_aplicada = payload.comissao_regra_aplicada
+    if (payload.notes !== undefined) updateData.notes = payload.notes
+
+    // Sincroniza status tradicional com estágio Vitacon
+    if (payload.estagio === 'fechamento') {
+      updateData.status = 'closed_won'
+      if (payload.valor_compra) updateData.deal_value = payload.valor_compra
+    }
+
+    const updated = await pb
+      .collection('referrals')
+      .update<ReferralRecord>(payload.referral_id, updateData)
+
+    // Grava histórico
+    try {
+      await pb.collection('referral_status_history').create({
+        referral_id: payload.referral_id,
+        new_status: payload.estagio || payload.status || 'atualizado',
+        changed_by: pb.authStore.record?.id || '',
+        notes: payload.notes || `Estágio atualizado para ${payload.estagio || payload.status}`,
+      })
+    } catch {
+      /* intentionally ignored */
+    }
+
+    return { success: true, data: updated }
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { message?: string }; message?: string }
+    return {
+      success: false,
+      error:
+        errorObj?.response?.message || errorObj?.message || 'Erro ao atualizar indicação Vitacon.',
+    }
+  }
+}
+
 export async function updateReferralStatus(
   payload: UpdateReferralStatusPayload,
 ): Promise<{ success: boolean; data?: UpdateReferralStatusResponse; error?: string }> {
@@ -696,6 +788,68 @@ export async function listAllBonuses(options?: {
 /**
  * Cria indicação no backend PocketBase calculando SLA de 3 horas e registrando histórico inicial
  */
+export interface CreateVitaconReferralPayload {
+  client_name: string
+  client_phone: string
+  client_email?: string
+  empreendimento_id?: string
+  unidade_escolhida_id?: string
+  notes?: string
+}
+
+export async function createVitaconReferral(payload: CreateVitaconReferralPayload): Promise<{
+  success: boolean
+  data?: ReferralRecord
+  error?: string
+}> {
+  try {
+    const currentUserId = pb.authStore.record?.id
+    if (!currentUserId) throw new Error('Não autenticado')
+
+    // Localiza indicator
+    const indicator = await getLoggedInIndicator(currentUserId)
+    if (!indicator) {
+      throw new Error('Perfil de indicador não encontrado ou você não está autorizado a indicar.')
+    }
+
+    // Cria o registro diretamente no PocketBase com dados completos
+    const newRef = await pb.collection('referrals').create<ReferralRecord>({
+      indicator_id: indicator.id,
+      client_name: payload.client_name,
+      client_phone: payload.client_phone,
+      client_email: payload.client_email || '',
+      property_type: 'vitacon',
+      status: 'sent',
+      estagio: 'lead_enviado',
+      empreendimento_id: payload.empreendimento_id || '',
+      unidade_escolhida_id: payload.unidade_escolhida_id || '',
+      notes: payload.notes || '',
+    })
+
+    // Registra histórico inicial
+    try {
+      await pb.collection('referral_status_history').create({
+        referral_id: newRef.id,
+        old_status: '',
+        new_status: 'lead_enviado',
+        changed_by: currentUserId,
+        notes: 'Indicação enviada pelo indicador Vitacon',
+      })
+    } catch {
+      /* intentionally ignored */
+    }
+
+    return { success: true, data: newRef }
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { message?: string }; message?: string }
+    const errorMsg =
+      errorObj?.response?.message ||
+      errorObj?.message ||
+      'Não foi possível registrar a indicação Vitacon.'
+    return { success: false, error: errorMsg }
+  }
+}
+
 export async function createReferral(payload: CreateReferralPayload): Promise<{
   success: boolean
   data?: CreateReferralResponse

@@ -84,7 +84,7 @@ export default function TrocarSenha() {
           </h1>
           <p className="text-sm text-gray-300 mt-2 max-w-sm mx-auto leading-relaxed">
             Para sua segurança, é obrigatório definir uma senha pessoal antes de acessar a
-            plataforma Indica Gabriel.
+            plataforma Programa de Indicação Vitacon.
           </p>
         </div>
 

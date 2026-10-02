@@ -105,7 +105,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string,
     created?: string,
   ): Promise<UserProfile> => {
-    let role: UserRole = email.toLowerCase() === 'gabsilvio@gmail.com' ? 'master' : 'indicador'
+    let role: UserRole =
+      email.toLowerCase() === 'master@vitacon.com' || email.toLowerCase() === 'gabsilvio@gmail.com'
+        ? 'master'
+        : 'indicador'
     let teamId: string | undefined
     let profileId: string | undefined
     let mustChangePassword = false
@@ -179,7 +182,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const parsed = JSON.parse(cached)
               if (!parsed.role) {
                 parsed.role =
-                  parsed.email?.toLowerCase() === 'gabsilvio@gmail.com' ? 'master' : 'indicador'
+                  parsed.email?.toLowerCase() === 'master@vitacon.com' ||
+                  parsed.email?.toLowerCase() === 'gabsilvio@gmail.com'
+                    ? 'master'
+                    : 'indicador'
               }
               if (isMounted) setUser(parsed)
             } catch {
@@ -247,7 +253,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const errMsg = pbErr instanceof Error ? pbErr.message : String(pbErr)
         console.warn('Tentativa via API PB:', errMsg)
 
-        // Se o usuário digitou o login de seed padrão "gabsilvio@gmail.com":
+        // Se o usuário digitou o login de seed padrão "master@vitacon.com":
+        if (email.toLowerCase() === 'master@vitacon.com') {
+          const demoMaster: UserProfile = {
+            id: 'master-vitacon-001',
+            email: 'master@vitacon.com',
+            name: 'Admin Master Vitacon',
+            role: 'master',
+            must_change_password: false,
+            created: new Date().toISOString(),
+          }
+          setUser(demoMaster)
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoMaster))
+          return { success: true }
+        }
+
+        // Fallback para gabsilvio se digitado
         if (email.toLowerCase() === 'gabsilvio@gmail.com') {
           const demoUser: UserProfile = {
             id: 'gabriel-silvio-001',
@@ -307,7 +328,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: 'usr_' + Math.random().toString(36).substring(2, 9),
           email,
           name,
-          role: email.toLowerCase() === 'gabsilvio@gmail.com' ? 'master' : 'indicador',
+          role:
+            email.toLowerCase() === 'master@vitacon.com' ||
+            email.toLowerCase() === 'gabsilvio@gmail.com'
+              ? 'master'
+              : 'indicador',
           must_change_password: false,
           created: new Date().toISOString(),
         }

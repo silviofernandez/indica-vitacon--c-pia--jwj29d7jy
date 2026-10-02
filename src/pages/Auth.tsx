@@ -29,8 +29,8 @@ export default function Auth() {
   }, [user, navigate])
 
   // Campos de Login
-  const [loginEmail, setLoginEmail] = useState('gabsilvio@gmail.com')
-  const [loginPassword, setLoginPassword] = useState('Skip@Pass')
+  const [loginEmail, setLoginEmail] = useState('master@vitacon.com')
+  const [loginPassword, setLoginPassword] = useState('Skip@Vitacon2026')
 
   // Campos de Cadastro
   const [signupName, setSignupName] = useState('')
@@ -134,10 +134,10 @@ export default function Auth() {
             to="/"
             className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md text-white border border-white/20 mb-4 hover:bg-white/15 transition-colors"
           >
-            <div className="w-7 h-7 rounded-lg bg-[#1a5d8f] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
               <Home className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold tracking-tight">Indica Gabriel</span>
+            <span className="font-bold tracking-tight">Programa Vitacon</span>
           </Link>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             {activeTab === 'login' ? 'Bem-vindo de volta' : 'Comece a indicar hoje'}

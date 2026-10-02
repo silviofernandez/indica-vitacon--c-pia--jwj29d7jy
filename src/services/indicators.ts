@@ -14,9 +14,26 @@ export interface IndicatorRecord {
   approval_status?: IndicatorApprovalStatus
   rejection_reason?: string
   approved?: boolean
+  autorizado?: boolean
+  empreendimento_id?: string
+  unidade_comprada_id?: string
+  unidade_descricao?: string
   profile_id?: string
   created?: string
   updated?: string
+  expand?: {
+    empreendimento_id?: {
+      id: string
+      nome: string
+      bairro?: string
+    }
+    unidade_comprada_id?: {
+      id: string
+      identificacao: string
+      torre?: string
+      valor?: number
+    }
+  }
 }
 
 export interface SubmitRegistrationData {
@@ -129,11 +146,133 @@ export async function listIndicators(): Promise<IndicatorRecord[]> {
   try {
     const records = await pb.collection('indicators').getFullList<IndicatorRecord>({
       sort: '-created',
+      expand: 'empreendimento_id,unidade_comprada_id',
     })
     return records
   } catch (err) {
     console.error('Erro ao listar indicadores:', err)
     return []
+  }
+}
+
+export async function createIndicatorByMaster(data: {
+  full_name: string
+  email: string
+  phone?: string
+  cpf_cnpj?: string
+  empreendimento_id?: string
+  unidade_comprada_id?: string
+  unidade_descricao?: string
+  autorizado?: boolean
+  initial_password?: string
+}): Promise<{ success: boolean; data?: IndicatorRecord; error?: string }> {
+  try {
+    // 1. Cria ou reutiliza usuário no PocketBase se senha ou email fornecido
+    const email = data.email.trim().toLowerCase()
+    const password = data.initial_password || 'Vitacon@2026'
+    let userId = ''
+    let profileId = ''
+
+    try {
+      const existingUser = await pb.collection('users').getFirstListItem(`email="${email}"`)
+      userId = existingUser.id
+    } catch {
+      // Cria novo usuário
+      const newUser = await pb.collection('users').create({
+        email: email,
+        password: password,
+        passwordConfirm: password,
+        name: data.full_name,
+        verified: true,
+      })
+      userId = newUser.id
+    }
+
+    // 2. Garante profile do usuário como indicador
+    try {
+      const existingProfile = await pb
+        .collection('profiles')
+        .getFirstListItem(`user_id="${userId}"`)
+      profileId = existingProfile.id
+      await pb.collection('profiles').update(profileId, {
+        role: 'indicador',
+        name: data.full_name,
+        phone: data.phone || '',
+      })
+    } catch {
+      const newProfile = await pb.collection('profiles').create({
+        user_id: userId,
+        name: data.full_name,
+        email: email,
+        phone: data.phone || '',
+        role: 'indicador',
+      })
+      profileId = newProfile.id
+    }
+
+    // 3. Cria registro em indicators
+    const rec = await pb.collection('indicators').create<IndicatorRecord>({
+      full_name: data.full_name,
+      email: email,
+      phone: data.phone || '',
+      cpf_cnpj: data.cpf_cnpj || '',
+      user_id: userId,
+      profile_id: profileId,
+      empreendimento_id: data.empreendimento_id || '',
+      unidade_comprada_id: data.unidade_comprada_id || '',
+      unidade_descricao: data.unidade_descricao || '',
+      autorizado: data.autorizado ?? true,
+      approved: data.autorizado ?? true,
+      approval_status: data.autorizado ? 'approved' : 'pending',
+    })
+
+    return { success: true, data: rec }
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { message?: string }; message?: string }
+    const errorMsg =
+      errorObj?.response?.message || errorObj?.message || 'Não foi possível cadastrar o indicador.'
+    return { success: false, error: errorMsg }
+  }
+}
+
+export async function updateIndicatorByMaster(
+  id: string,
+  data: Partial<IndicatorRecord> & { new_password?: string },
+): Promise<{ success: boolean; data?: IndicatorRecord; error?: string }> {
+  try {
+    const { new_password, ...fieldsToUpdate } = data
+
+    // Atualiza o registro em indicators
+    const updated = await pb.collection('indicators').update<IndicatorRecord>(id, {
+      ...fieldsToUpdate,
+      approved: fieldsToUpdate.autorizado !== undefined ? fieldsToUpdate.autorizado : undefined,
+      approval_status:
+        fieldsToUpdate.autorizado !== undefined
+          ? fieldsToUpdate.autorizado
+            ? 'approved'
+            : 'pending'
+          : undefined,
+    })
+
+    // Se informou nova senha e tem user_id, atualiza no users
+    if (new_password && updated.user_id) {
+      try {
+        await pb.collection('users').update(updated.user_id, {
+          password: new_password,
+          passwordConfirm: new_password,
+        })
+      } catch (pwErr) {
+        console.warn('Aviso ao atualizar senha do usuário:', pwErr)
+      }
+    }
+
+    return { success: true, data: updated }
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { message?: string }; message?: string }
+    return {
+      success: false,
+      error: errorObj?.response?.message || errorObj?.message || 'Erro ao atualizar indicador.',
+    }
   }
 }
 
