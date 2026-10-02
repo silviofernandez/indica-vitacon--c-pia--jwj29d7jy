@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- G Verde Oficial Imobiliária Gabriel (#14522a) -->
+  <defs>
+    <style>
+      .green-fill { fill: #14522a; }
+      .circle-bg { fill: #14522a; }
+      .cutout { fill: #ffffff; }
+    </style>
+  </defs>
+
+  <!-- O G é um anel circular com corte e travessão horizontal estilizado -->
+  <g class="green-fill">
+    <!-- Aro externo circular grosso -->
+    <path d="M 256 16 C 123.45 16 16 123.45 16 256 C 16 388.55 123.45 496 256 496 C 354.55 496 439.1 436.5 476.3 351.4 L 401.8 318.8 C 374.8 376.6 319.6 416 256 416 C 167.63 416 96 344.37 96 256 C 96 167.63 167.63 96 256 96 C 322.25 96 379.2 136.4 403.4 194.3 L 477.5 160.9 C 438.4 75.3 353.5 16 256 16 Z" />
+    
+    <!-- Travessão central interno do G -->
+    <path d="M 240 216 L 440 216 C 457.67 216 472 230.33 472 248 L 472 352 L 392 352 L 392 296 L 240 296 C 222.33 296 208 281.67 208 264 L 208 248 C 208 230.33 222.33 216 240 216 Z" />
+  </g>
+</svg>
